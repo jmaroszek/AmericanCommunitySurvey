@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(party)
 library(knitr)
+library(magrittr)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
@@ -61,7 +62,7 @@ for(i in seq.int(80)){
 nvar = ncol(data)
 varnames = names(data)
 roles = rep("c", nvar) #default is categorical vars
-num.vars = c("PWGTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
+num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
 roles[varnames %in% num.vars] = "n" #numerical variables
 roles[varnames ==  "INTP"] = "d" #dependent variable
 roles[varnames %in% PWGTPvec] = "x" #vars to drop
@@ -76,6 +77,12 @@ row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
 
 ```{r Variable Type Correction}
+varnames.clean = names(clean.data.1)
+cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
 
+clean.data.2 = clean.data.1 %>% 
+  mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
+  mutate(across(all_of(cat.vars), as.character)) #changes type to character 
+  
 ```
 
