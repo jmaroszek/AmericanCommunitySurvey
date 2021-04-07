@@ -50,34 +50,8 @@ top.ten.missing.vals = sort(large.prop.missing.vals, decreasing = TRUE)[1:10]
 kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3)
 ```
 
-
-```{r Creating GUIDE Description File, cache=TRUE, include=FALSE}
-#create vector of the variables PWGTP1-80 to exclude 
-PWGTPvec = vector("character", 80)
-for(i in seq.int(80)){
-  PWGTPvec[i] = paste("PWGTP",i, sep = "")
-}
-
-#create vector - roles - that describes type of each variable in analysis USING ORGINAL DATA SET (not cleaned)
-#Use Data description file from ACS to determine variable type
-nvar = ncol(data)
-varnames = names(data)
-roles = rep("c", nvar) #default is categorical vars
-num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
-roles[varnames %in% num.vars] = "n" #numerical variables
-roles[varnames ==  "INTP"] = "d" #dependent variable
-roles[varnames %in% PWGTPvec] = "x" #vars to drop
-roles[varnames %in% vars.to.drop] = "x"
-
-#produce GUIDE Description File
-write("psam_p47.csv", file = "GUIDEdesc.txt")
-write("NA",file="GUIDEdesc.txt",append=TRUE)
-write("2",file="GUIDEdesc.txt",append=TRUE)
-write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
-row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
-```
-
 ```{r Variable Type Correction, include=FALSE, cache = TRUE}
+num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
 varnames.clean = names(clean.data.1)
 cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
 
@@ -86,6 +60,8 @@ clean.data.2 = clean.data.1 %>%
   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
 
+write_csv(clean.data.2, "cleanData.csv")
+
 ```
 
 ```{r Subset creation for importance scoring}
@@ -93,6 +69,24 @@ clean.data.2 = clean.data.1 %>%
 dim.clean.data.2 = dim(clean.data.2)
 subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #1/4 the size of original
 subset = clean.data.2[subset.indices,]
-write_csv(subset,"subsetImpScore.csv") 
+write_csv(subset,"QuarterSubset.csv") 
+```
+
+```{r create guide description file for cleaned data set}
+nvar = ncol(clean.data.2)
+varnames = names(clean.data.2)
+roles = rep("c", nvar) #default is categorical vars
+num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
+roles[varnames %in% num.vars] = "n" #numerical variables
+roles[varnames ==  "INTP"] = "d" #dependent variable
+#roles[varnames %in% PWGTPvec] = "x" #vars to drop
+roles[varnames %in% vars.to.drop] = "x"
+
+#produce GUIDE Description File
+write("cleanData.csv", file = "GUIDEdesc.txt")
+write("NA",file="GUIDEdesc.txt",append=TRUE)
+write("2",file="GUIDEdesc.txt",append=TRUE)
+write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
+row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
 
