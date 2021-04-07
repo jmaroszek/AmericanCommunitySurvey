@@ -8,14 +8,47 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(party)
+library(knitr)
 ```
+## Introduction
+In this project we will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP.
 
-```{r}
+```{r Data Import and Diagnosis, cache=TRUE, include=FALSE}
 #changing guess_max to 10000 gets rid of all parsing failures
 data = read_csv("psam_p47.csv", guess_max = 10000)
+initial.dimensions = dim(data)
 
-#finds variables where every value is the same
+#finds variables where every value is the same to exclude from analysis
 all.same = apply(data, 2, function(a) length(unique(a))==1)
-cols.all.same = data[all.same] #6 cols have all the same value
+cols.all.same = data[all.same]
+```
+
+## Data Cleaning
+There are 8 variables in the data set that either have only one unique value, or they are a unique identifier, and thus not useful for prediction of INTP. These variables are: ADJINC, DIVISION, FANCP, REGION, RT, SERIALNO, SPORDER, ST.  
+
+In addition to these variables, the variables PWGTP1-80 have been excluded, as these are sampling weights that are not needed for this analysis.  
+
+Of the remaining variables, 43 of them have at least half of the values missing. The top ten variables that have the most missing values can be seen in the following table.
+```{r Data Cleaning, echo=FALSE, cache=TRUE}
+#First Phase of Data cleaning
+vars.to.drop = c("ADJINC", "DIVISION", "FANCP", "REGION", "RT", "SERIALNO", "SPORDER", "ST")
+clean.data.1 = data %>% 
+  select(-all_of(vars.to.drop)) %>% #drops vars that have one unique value and unique identifiers not useful for prediction
+  select(-num_range("PWGTP", 1:80)) #drop unneeded sampling weights
+
+dim.clean.data.1 = dim(clean.data.1)
+
+#find proportion of missing values for remaining variables
+missing.vals.logi = apply(clean.data.1,2, is.na)
+prop.missing.vals = apply(missing.vals.logi, 2, sum) / dim.clean.data.1[1]
+large.prop.missing.vals = prop.missing.vals[prop.missing.vals > 0.5]
+top.ten.missing.vals = sort(large.prop.missing.vals, decreasing = TRUE)[1:10]
+kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Table 1: Variables and Proportion of Missing Values", digits = 3)
+```
+
+
+```{r}
+
 ```
 
