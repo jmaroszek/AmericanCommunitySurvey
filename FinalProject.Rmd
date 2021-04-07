@@ -1,0 +1,21 @@
+---
+title: "American Community Survery Project"
+author: "Jonah Maroszek"
+date: "3/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r}
+#changing guess_max to 10000 gets rid of all parsing failures
+data = read_csv("psam_p47.csv", guess_max = 10000)
+
+#finds variables where every value is the same
+all.same = apply(data, 2, function(a) length(unique(a))==1)
+cols.all.same = data[all.same] #6 cols have all the same value
+```
+
