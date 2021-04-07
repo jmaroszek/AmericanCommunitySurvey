@@ -2,7 +2,9 @@
 title: "American Community Survery Project"
 author: "Jonah Maroszek"
 date: "3/24/2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -12,10 +14,9 @@ library(party)
 library(knitr)
 ```
 ## Introduction
-In this project we will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP.
+In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
 
 ```{r Data Import and Diagnosis, cache=TRUE, include=FALSE}
-#changing guess_max to 10000 gets rid of all parsing failures
 data = read_csv("psam_p47.csv", guess_max = 10000)
 initial.dimensions = dim(data)
 
@@ -44,9 +45,37 @@ missing.vals.logi = apply(clean.data.1,2, is.na)
 prop.missing.vals = apply(missing.vals.logi, 2, sum) / dim.clean.data.1[1]
 large.prop.missing.vals = prop.missing.vals[prop.missing.vals > 0.5]
 top.ten.missing.vals = sort(large.prop.missing.vals, decreasing = TRUE)[1:10]
-kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Table 1: Variables and Proportion of Missing Values", digits = 3)
+kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3)
 ```
 
+
+```{r Creating GUIDE Description File + Var Type Update}
+#Use Data description file from ACS to determine var type
+
+#create vector of sampling weights to exclude in GUIDE file
+PWGTPvec = vector("character", 80)
+for(i in seq.int(80)){
+  PWGTPvec[i] = paste("PWGTP",i, sep = "")
+}
+
+nvar = ncol(data)
+varnames = names(data)
+roles = rep("c", nvar) #default is categorical vars
+num.vars = c("PWGTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
+roles[varnames %in% num.vars] = "n" #numerical variables
+roles[varnames ==  "INTP"] = "d" #dependent variable
+roles[varnames %in% PWGTPvec] = "x"
+roles[varnames %in% vars.to.drop] = "x"
+
+#produce GUIDE Description File
+write("psam_p47.csv", file = "GUIDEdesc.txt")
+write("NA",file="GUIDEdesc.txt",append=TRUE)
+write("2",file="GUIDEdesc.txt",append=TRUE)
+write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
+row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
+
+#Change to correct column types in data frame
+```
 
 ```{r}
 
