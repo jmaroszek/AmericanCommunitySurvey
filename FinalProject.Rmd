@@ -49,22 +49,22 @@ kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Vari
 ```
 
 
-```{r Creating GUIDE Description File + Var Type Update}
-#Use Data description file from ACS to determine var type
-
-#create vector of sampling weights to exclude in GUIDE file
+```{r Creating GUIDE Description File, cache=TRUE, include=FALSE}
+#create vector of the variables PWGTP1-80 to exclude 
 PWGTPvec = vector("character", 80)
 for(i in seq.int(80)){
   PWGTPvec[i] = paste("PWGTP",i, sep = "")
 }
 
+#create vector - roles - that describes type of each variable in analysis USING ORGINAL DATA SET (not cleaned)
+#Use Data description file from ACS to determine variable type
 nvar = ncol(data)
 varnames = names(data)
 roles = rep("c", nvar) #default is categorical vars
 num.vars = c("PWGTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
 roles[varnames %in% num.vars] = "n" #numerical variables
 roles[varnames ==  "INTP"] = "d" #dependent variable
-roles[varnames %in% PWGTPvec] = "x"
+roles[varnames %in% PWGTPvec] = "x" #vars to drop
 roles[varnames %in% vars.to.drop] = "x"
 
 #produce GUIDE Description File
@@ -73,11 +73,9 @@ write("NA",file="GUIDEdesc.txt",append=TRUE)
 write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
-
-#Change to correct column types in data frame
 ```
 
-```{r}
+```{r Variable Type Correction}
 
 ```
 
