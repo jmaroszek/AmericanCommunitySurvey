@@ -3,8 +3,8 @@ title: "American Community Survery Project"
 author: "Jonah Maroszek"
 date: "3/24/2021"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -18,6 +18,7 @@ library(magrittr)
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
 
 ```{r Data Import and Diagnosis, cache=TRUE, include=FALSE}
+#will need to correct column types later on 
 data = read_csv("psam_p47.csv", guess_max = 10000)
 initial.dimensions = dim(data)
 
@@ -76,13 +77,22 @@ write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
 
-```{r Variable Type Correction}
+```{r Variable Type Correction, include=FALSE, cache = TRUE}
 varnames.clean = names(clean.data.1)
 cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
 
+#this data set has correct column types 
 clean.data.2 = clean.data.1 %>% 
   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
-  
+
+```
+
+```{r Subset creation for importance scoring}
+#take a small, random sample from the cleaned data frame in order to decrease run time of guide importance scoring algorithm
+dim.clean.data.2 = dim(clean.data.2)
+subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #1/4 the size of original
+subset = clean.data.2[subset.indices,]
+write_csv(subset,"subsetImpScore.csv") 
 ```
 
