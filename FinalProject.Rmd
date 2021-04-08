@@ -89,8 +89,9 @@ write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
-Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in the following figure.
-```{r Plot Importance Scores, include = FALSE, cache = TRUE}
+Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in the following figure. After excluding the unimportant variables, the data set now contains 77 variables that will be used in the subsequent analysis.
+
+```{r Plot Importance Scores, echo=FALSE, cache=FALSE}
 par(las=1,mar=c(5,12,4,2),cex=0.75)
 leg.col <- c("orange","yellow")
 leg.txt <- c("highly important","likely important")
@@ -109,22 +110,44 @@ legend("bottomright",legend=leg.txt,fill=leg.col)
 
 ```
 
-After excluding the unimportant variables, the data set now contains 77 variables.
+
+The top three variables for predicting INTP are PINCP, AGEP, and POVPIP. PINCP gives a persons total income, AGEP is a person's age, and POVPIP is an income to poverty ratio metric. It seems that all of these may be measuring directly or indirectly a person's ability to earn, and thus invest, money. The connection is very clear for PINCP, but is more subtle in AGEP. Typically people do not invest a substantial amount of money before the age of 20, and as their portfolio grows (in dollars and in time), they are more likely to earn money at a faster rate thanks to compound interest. POVPIP is also logically connected to a person's monetary standing, and therefore is unsurprisingly useful in predicting INTP.
 
 
-```{r Final Data Cleanse}
+```{r Final Data Cleanse, include = FALSE, cache = TRUE}
 #extract names of significant variables found in GUIDE to get final version of the data set for analysis
 signifVarsOneString = read_lines("cleanDataFinal.txt", skip = 4, n_max = 1)
 signif.Vars = strsplit(signifVarsOneString, split = " ")[[1]]
 final.data = clean.data.2[signif.Vars]
+write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 remaining
+```
 
+```{r GUIDE classification tree, include= FALSE, cache = TRUE}
+#create flag variable that tells if INTP has missing value on clean.data.2 ("cleanData.csv") to use for classification tree/forest
+#note i am using clean.data.2 but the guide description file only includes the variables present in finalData and the flag variable for INTP
+clean.data.2.with.flag = clean.data.2 %>% 
+  mutate(is.missing.intp = is.na(INTP))
+
+write_csv(clean.data.2.with.flag, "cleanData2WFlag.csv") #export data to use in GUIDE
+
+#update description file to include is.missing.intp as dependent variable and remove intp from this part
+```
+
+```{r IPW Mean Guide Tree, include = FALSE, cache = TRUE}
+zclass = read.table("classfit.txt", header = TRUE)
+probmissing = zclass[,6] #prob INTP is missing
+group = !is.na(clean.data.2$INTP) #nonmissing INTP obs
+weights = clean.data.2$PWGTP
+ipw = sum(weights[group]*clean.data.2$INTP[group]/probmissing[group])/sum(weights[group]/probmissing[group])
+
+simple.mean = sum(weights[group] * clean.data.2$INTP[group])/sum(weights[group])
+```
+
+```{r}
 
 ```
 
 
-# Short term to do list
-clean data further by removing unimportant variables found in guide importance scoring (and update guide description file)
-fit guide tree and forest
 
 
 
