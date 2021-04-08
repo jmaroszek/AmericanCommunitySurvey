@@ -60,11 +60,11 @@ clean.data.2 = clean.data.1 %>%
   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
 
-write_csv(clean.data.2, "cleanData.csv") #export clean data file to use in guide
+write_csv(clean.data.2, "cleanData.csv") #export clean data (200 variables) file to use in guide
 
 ```
 
-```{r Subset creation for importance scoring}
+```{r Subset creation for importance scoring, include = FALSE, cache = TRUE}
 #take a small, random sample from the cleaned data frame in order to decrease run time of guide importance scoring algorithm
 dim.clean.data.2 = dim(clean.data.2)
 subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #randomly picked subset 
@@ -72,7 +72,7 @@ subset = clean.data.2[subset.indices,] #1/4 the size of original data frame
 write_csv(subset,"QuarterSubset.csv") #export clean data file to use in guide
 ```
 
-```{r create guide description file for cleaned data set}
+```{r create guide description file for cleaned data set, include = FALSE, cache = TRUE}
 #create guide description file for clean.data.2
 nvar = ncol(clean.data.2)
 varnames = names(clean.data.2)
@@ -89,16 +89,42 @@ write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
+Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in the following figure.
+```{r Plot Importance Scores, include = FALSE, cache = TRUE}
+par(las=1,mar=c(5,12,4,2),cex=0.75)
+leg.col <- c("orange","yellow")
+leg.txt <- c("highly important","likely important")
+x <- read.table("impScores.txt",header=TRUE)
+score <- x$Score
+vars <- x$Variable
+type <- x$Type
+barcol <- rep("orange",length(vars))
+barcol[type == "L"] <- "yellow"
+barcol[type == "U"] <- "cyan"
+n <- sum(x$Type != "U")
+barplot(rev(score[1:20]),names.arg=rev(vars[1:20]),
+col=rev(barcol[1:20]),horiz=TRUE,xlab="GUIDE importance scores", main = "Top 20 Important Variables")
+abline(v=1,col="red",lty=2)
+legend("bottomright",legend=leg.txt,fill=leg.col)
 
-```{r data cleansing phase three}
-#exclude variables found to be unimportant by guide from clean.data.2 to make clean.data.3
-#use guide subset function (as seen open in power point right now, slide 89 )
+```
+
+After excluding the unimportant variables, the data set now contains 77 variables.
+
+
+```{r Final Data Cleanse}
+#extract names of significant variables found in GUIDE to get final version of the data set for analysis
+signifVarsOneString = read_lines("cleanDataFinal.txt", skip = 4, n_max = 1)
+signif.Vars = strsplit(signifVarsOneString, split = " ")[[1]]
+final.data = clean.data.2[signif.Vars]
+
+
 ```
 
 
-#to do
-clean data further from information provided by guide importance scoring
+# Short term to do list
+clean data further by removing unimportant variables found in guide importance scoring (and update guide description file)
 fit guide tree and forest
-impute missing values at least two ways
+
 
 
