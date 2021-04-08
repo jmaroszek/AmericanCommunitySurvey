@@ -133,14 +133,18 @@ write_csv(clean.data.2.with.flag, "cleanData2WFlag.csv") #export data to use in 
 #update description file to include is.missing.intp as dependent variable and remove intp from this part
 ```
 
-```{r IPW Mean Guide Tree, include = FALSE, cache = TRUE}
+```{r IPW Mean Estimation, include = FALSE, cache = TRUE}
+#IPW method with classification GUIDE Tree
 zclass = read.table("classfit.txt", header = TRUE)
-probmissing = zclass[,6] #prob INTP is missing
+p.nonmissing = zclass[,5] #prob INTP is non-missing
 group = !is.na(clean.data.2$INTP) #nonmissing INTP obs
 weights = clean.data.2$PWGTP
-ipw = sum(weights[group]*clean.data.2$INTP[group]/probmissing[group])/sum(weights[group]/probmissing[group])
+ipw = sum(weights[group]*clean.data.2$INTP[group]/p.nonmissing[group])/sum(weights[group]/p.nonmissing[group])
 
-simple.mean = sum(weights[group] * clean.data.2$INTP[group])/sum(weights[group])
+#IWP method with classification GUIDE Forest
+zclass.forest = read.table("classfitForest.txt", header = TRUE)
+p.forest = zclass.forest[,2]
+ipw.forest = sum(weights[group]*clean.data.2$INTP[group]/p.forest[group])/sum(weights[group]/p.forest[group])
 ```
 
 ```{r}
