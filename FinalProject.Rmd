@@ -37,8 +37,8 @@ Of the remaining variables, 43 of them have at least half of the values missing.
 #First Phase of Data cleaning
 vars.to.drop = c("ADJINC", "DIVISION", "FANCP", "REGION", "RT", "SERIALNO", "SPORDER", "ST")
 clean.data.1 = data %>% 
-  select(-all_of(vars.to.drop)) %>% #drops vars that have one unique value and unique identifiers not useful for prediction
-  select(-num_range("PWGTP", 1:80)) #drop unneeded sampling weights
+  select(-all_of(vars.to.drop)) %>% 
+  select(-num_range("PWGTP", 1:80)) 
 
 dim.clean.data.1 = dim(clean.data.1)
 
@@ -51,8 +51,8 @@ kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Vari
 ```
 
 ```{r Variable Type Correction, include=FALSE, cache = TRUE}
-num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
-varnames.clean = names(clean.data.1)
+num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP", "CITWP", "MARHYP", "YOEP") #numerical variables 
+varnames.clean = names(clean.data.1) #get column names of clean data frame
 cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
 
 #this data set has correct column types 
@@ -60,26 +60,27 @@ clean.data.2 = clean.data.1 %>%
   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
 
-write_csv(clean.data.2, "cleanData.csv")
+write_csv(clean.data.2, "cleanData.csv") #export clean data file to use in guide
 
 ```
 
 ```{r Subset creation for importance scoring}
 #take a small, random sample from the cleaned data frame in order to decrease run time of guide importance scoring algorithm
 dim.clean.data.2 = dim(clean.data.2)
-subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #1/4 the size of original
-subset = clean.data.2[subset.indices,]
-write_csv(subset,"QuarterSubset.csv") 
+subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #randomly picked subset 
+subset = clean.data.2[subset.indices,] #1/4 the size of original data frame
+write_csv(subset,"QuarterSubset.csv") #export clean data file to use in guide
 ```
 
 ```{r create guide description file for cleaned data set}
+#create guide description file for clean.data.2
 nvar = ncol(clean.data.2)
 varnames = names(clean.data.2)
 roles = rep("c", nvar) #default is categorical vars
-num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
 roles[varnames %in% num.vars] = "n" #numerical variables
 roles[varnames ==  "INTP"] = "d" #dependent variable
-roles[varnames %in% vars.to.drop] = "x"
+roles[varnames == "PWGTP"] = "w" #sampling weight variable
+roles[varnames %in% vars.to.drop] = "x" #variables to exclude from analysis
 
 #produce GUIDE Description File
 write("cleanData.csv", file = "GUIDEdesc.txt")
@@ -88,8 +89,16 @@ write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
-#to do 
-exclude variables found to be unimportant by guide from clean.data.2 to make clean.data.3 
+
+```{r data cleansing phase three}
+#exclude variables found to be unimportant by guide from clean.data.2 to make clean.data.3
+#use guide subset function (as seen open in power point right now, slide 89 )
+```
+
+
+#to do
+clean data further from information provided by guide importance scoring
+fit guide tree and forest
 impute missing values at least two ways
-start fitting models 
+
 
