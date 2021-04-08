@@ -79,7 +79,6 @@ roles = rep("c", nvar) #default is categorical vars
 num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP")
 roles[varnames %in% num.vars] = "n" #numerical variables
 roles[varnames ==  "INTP"] = "d" #dependent variable
-#roles[varnames %in% PWGTPvec] = "x" #vars to drop
 roles[varnames %in% vars.to.drop] = "x"
 
 #produce GUIDE Description File
@@ -89,4 +88,8 @@ write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
+#to do 
+exclude variables found to be unimportant by guide from clean.data.2 to make clean.data.3 
+impute missing values at least two ways
+start fitting models 
 
