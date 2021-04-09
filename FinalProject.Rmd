@@ -61,7 +61,6 @@ clean.data.2 = clean.data.1 %>%
   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
 
 write_csv(clean.data.2, "cleanData.csv") #export clean data (200 variables) file to use in guide
-
 ```
 
 ```{r Subset creation for importance scoring, include = FALSE, cache = TRUE}
@@ -122,6 +121,8 @@ final.data = clean.data.2[signif.Vars]
 write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 remaining
 ```
 
+## Estimation of Mean Using Inverse Probability Weighting
+A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean.
 ```{r GUIDE classification tree, include= FALSE, cache = TRUE}
 #create flag variable that tells if INTP has missing value on clean.data.2 ("cleanData.csv") to use for classification tree/forest
 #note i am using clean.data.2 but the guide description file only includes the variables present in finalData and the flag variable for INTP
@@ -133,21 +134,40 @@ write_csv(clean.data.2.with.flag, "cleanData2WFlag.csv") #export data to use in 
 #update description file to include is.missing.intp as dependent variable and remove intp from this part
 ```
 
-```{r IPW Mean Estimation, include = FALSE, cache = TRUE}
+```{r IPW Mean Estimation, echo = FALSE, cache = TRUE}
 #IPW method with classification GUIDE Tree
 zclass = read.table("classfit.txt", header = TRUE)
 p.nonmissing = zclass[,5] #prob INTP is non-missing
-group = !is.na(clean.data.2$INTP) #nonmissing INTP obs
-weights = clean.data.2$PWGTP
-ipw = sum(weights[group]*clean.data.2$INTP[group]/p.nonmissing[group])/sum(weights[group]/p.nonmissing[group])
+g = !is.na(clean.data.2$INTP) #nonmissing INTP obs
+w = clean.data.2$PWGTP
+ipw = sum(w[g]*clean.data.2$INTP[g]/p.nonmissing[g])/sum(w[g]/p.nonmissing[g])
 
 #IWP method with classification GUIDE Forest
 zclass.forest = read.table("classfitForest.txt", header = TRUE)
 p.forest = zclass.forest[,2]
-ipw.forest = sum(weights[group]*clean.data.2$INTP[group]/p.forest[group])/sum(weights[group]/p.forest[group])
+ipw.forest = sum(w[g]*clean.data.2$INTP[g]/p.forest[g])/sum(w[g]/p.forest[g])
+
+naive.mean = mean(clean.data.2$INTP, na.rm = T) #mean from ignoring misisng values
+
+results = data.frame("GUIDE Tree Prediction" = ipw, 
+                     "GUIDE Forest Prediction" = ipw.forest,
+                     "Niave Mean" = naive.mean)
+kable(results, digits = 2,
+      col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Niave Mean"))
 ```
 
-```{r}
+
+
+## Estimation of Mean Using Imputation Methods
+```{r Guide Tree and Forest Imputation, include = FALSE, cache = TRUE}
+zreg = read.table("regTreeFit.txt", header = T)
+yhat = zreg$predicted
+imputed.tree = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat[!g])))/(sum(w)*10) #correction factor 
+
+zreg.forest = read.table("regForestFit.txt", header = T)
+yhat.f =zreg.forest$predicted
+imputed.forest = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat.f[!g])))/(sum(w)*5) #correction factor
+
 
 ```
 
