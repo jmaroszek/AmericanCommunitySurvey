@@ -32,22 +32,21 @@ There are 8 variables in the data set that either have only one unique value, or
 
 In addition to these variables, the variables PWGTP1-80 have been excluded, as these are sampling weights that are not needed for this analysis.  
 
-Of the remaining variables, 43 of them have at least half of the values missing. The top ten variables that have the most missing values can be seen in the following table.
+Of the remaining variables, 43 of them have at least half of the values missing. The top ten variables that have the most missing values can be seen in the following table. Note that I have corrected for imputed values. There are many flag variables, such as FINTP, that take on values 0 or 1. In the case that FINTP = 1, I have set the corresponding INTP values to NA in order to run GUIDE analysis on the unadulterated data set. I will use my own imputation methods later in order to use methods that can not handle missing values when estimating the mean of INTP.
 ```{r Allocation flag work, cache = TRUE, include = FALSE}
 
 #all flag variables start with an F, but some other columns might be absorbed too
 possible.flag.vars = names(data %>% 
   select(starts_with("F"))) 
 
-non.flag.vars = "FOD2P" #only variable starting with F that isn't a flag variable
-flag.vars = possible.flag.vars[!(possible.flag.vars %in% non.flag.vars)] #removes none flag vars 
+non.flag.vars = "FOD2P" #variable starting with F that isn't a flag variable
+flag.vars = possible.flag.vars[!(possible.flag.vars %in% non.flag.vars)] #removes none-flag vars 
 actual.vars = sub('.','',flag.vars) #removes leading F in flag variables
 act.vars.in.data.logi = actual.vars %in% names(data) #not all of the real variables exist in the person data set
 
 #update vectors to contain only the variables present in the data set for both the flag variables and the regular variable
 flag.vars = flag.vars[act.vars.in.data.logi]
 actual.vars = actual.vars[act.vars.in.data.logi]
-
 index = 1 #will be used to index into actual.vars in the for loop 
 
 #replace instances where flag var are one with NA'S
@@ -99,7 +98,7 @@ write_csv(subset,"QuarterSubset.csv") #export clean data file to use in guide
 ```
 
 ```{r create guide description file for cleaned data set, include = FALSE, cache = TRUE}
-#create guide description file for clean.data.2
+#create guide description file for clean.data.2 
 nvar = ncol(clean.data.2)
 varnames = names(clean.data.2)
 roles = rep("c", nvar) #default is categorical vars
@@ -149,14 +148,14 @@ write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 re
 ```
 
 ## Estimation of Mean Using Inverse Probability Weighting
-A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean.
+A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean, where we simply ignore missing values in INTP, and the simple weighted estimate of the mean.
 ```{r GUIDE classification tree, include= FALSE, cache = TRUE}
 #create flag variable that tells if INTP has missing value on clean.data.2 ("cleanData.csv") to use for classification tree/forest
 #note i am using clean.data.2 but the guide description file only includes the variables present in finalData and the flag variable for INTP
-clean.data.2.with.flag = clean.data.2 %>% 
-  mutate(is.missing.intp = is.na(INTP))
-
-write_csv(clean.data.2.with.flag, "cleanData2WFlag.csv") #export data to use in GUIDE
+# clean.data.2.with.flag = clean.data.2 %>% 
+#   mutate(is.missing.intp = is.na(INTP))
+# 
+# write_csv(clean.data.2.with.flag, "cleanData2WFlag.csv") #export data to use in GUIDE
 
 #update description file to include is.missing.intp as dependent variable and remove intp from this part
 ```
@@ -175,12 +174,15 @@ p.forest = zclass.forest[,2]
 ipw.forest = sum(w[g]*clean.data.2$INTP[g]/p.forest[g])/sum(w[g]/p.forest[g])
 
 naive.mean = mean(clean.data.2$INTP, na.rm = T) #mean from ignoring misisng values
+simple = (sum(w[g]*clean.data.2$INTP[g]))/sum(w[g])
 
 results = data.frame("GUIDE Tree Prediction" = ipw, 
                      "GUIDE Forest Prediction" = ipw.forest,
-                     "Niave Mean" = naive.mean)
+                     "Simple Weighted Sum" = simple,
+                     "Ignore Missing Values" = naive.mean)
+
 kable(results, digits = 2,
-      col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Niave Mean"))
+      col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Simple Weighted Sum", "Niave Mean"))
 ```
 
 
@@ -189,11 +191,11 @@ kable(results, digits = 2,
 ```{r Guide Tree and Forest Imputation, include = FALSE, cache = TRUE}
 zreg = read.table("regTreeFit.txt", header = T)
 yhat = zreg$predicted
-imputed.tree = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat[!g])))/(sum(w)*10) #correction factor 
+imputed.tree = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat[!g])))/(sum(w))  
 
 zreg.forest = read.table("regForestFit.txt", header = T)
 yhat.f =zreg.forest$predicted
-imputed.forest = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat.f[!g])))/(sum(w)*5) #correction factor
+imputed.forest = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat.f[!g])))/(sum(w)) 
 
 reg.table = data.frame("tree" = imputed.tree,
                        "forest" = imputed.forest)
