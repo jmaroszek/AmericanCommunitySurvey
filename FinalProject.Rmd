@@ -178,7 +178,7 @@ kable(results, digits = 2,
 
 
 ## Estimation of Mean Using Imputation Methods
-```{r Guide Tree and Forest Imputation, include = FALSE, cache = TRUE}
+```{r Guide Tree and Forest Imputation, echo = FALSE, cache = TRUE}
 zreg = read.table("regFit.txt", header = T)
 yhat = zreg$predicted
 imputed.tree = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat[!g])))/(sum(w))  
