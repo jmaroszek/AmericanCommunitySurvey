@@ -15,6 +15,7 @@ library(party)
 library(knitr)
 library(magrittr)
 library(rpart)
+library(rpart.plot)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
@@ -246,17 +247,22 @@ final.data = final.data[signif.Vars] ##57411 by 77
 dim.final.data = dim(final.data)
 ```
 
-## Estimation Using RPART and CTREE
+## IPW Estimation Using RPART and CTREE
+The best RPART tree includes the variable ANC1P; however, this variable has greater than 52 levels, and thus is not useful when looking at a plot of the tree. Even changing text arguments will not result in a usable plot. This is also the case for the variable SOCP when ANC1P is removed from the analysis.
+
+In order to give a simple, usable graph for an RPART tree, I have removed these variables *from the diagram only.* Note that I kept the best rpart tree in order to estimate the mean of INTP using the IPW method. The best RPART tree uses FHINS6P, ANC1P, and NWLA as split variables.
 ```{r rpart, cache = TRUE, echo = FALSE}
-rp = rpart(FINTP ~ . - INTP - PWGTP, data = final.data, method = "anova")
-plot(rp,compress=TRUE,margin=0.1)
-text(rp)
-p = predict(rp)
+temp = final.data %>% 
+  select(-ANC1P) %>% 
+  select(-SOCP)
+
+rp.tree = rpart(FINTP ~ . - INTP - PWGTP, data = temp, method = "anova") #simple graph
+rp.real = rpart(FINTP ~. - INTP - PWGTP, data = final.data, method = "anova") #usef for estimate
+rpart.plot(rp.tree)
+p = predict(rp.real)
 w = final.data$PWGTP
 y = final.data$INTP
 gp = !is.na(y)
-ipw =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
-
-
+ipw.rpart =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 ```
 
