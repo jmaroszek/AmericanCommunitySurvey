@@ -5,6 +5,7 @@ date: "3/24/2021"
 output:
   html_document: default
   pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -13,6 +14,7 @@ library(tidyverse)
 library(party)
 library(knitr)
 library(magrittr)
+library(rpart)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
@@ -20,6 +22,7 @@ In this project I will use data for the state of Tennessee collected by ACS (Ame
 ```{r Data Import and Diagnosis, cache=TRUE, include=FALSE}
 #will need to correct column types later on 
 data = read_csv("psam_p47.csv", guess_max = 10000)
+#data = data[!is.na(data$INTP),] #removes people younger than 15 from data set
 initial.dimensions = dim(data)
 
 #finds variables where every value is the same to exclude from analysis
@@ -89,15 +92,15 @@ write_csv(clean.data.2, "cleanData.csv") #export clean data (200 variables) file
 ```
 
 
-```{r Subset creation for importance scoring, include = FALSE, cache = TRUE}
-#take a small, random sample from the cleaned data frame in order to decrease run time of guide importance scoring algorithm
+```{r Subset creation for importance scoring, eval=FALSE, cache=FALSE, include=FALSE}
+take a small, random sample from the cleaned data frame in order to decrease run time of guide importance scoring algorithm
 dim.clean.data.2 = dim(clean.data.2)
-subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #randomly picked subset 
+subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #randomly picked subset
 subset = clean.data.2[subset.indices,] #1/4 the size of original data frame
 write_csv(subset,"QuarterSubset.csv") #export clean data file to use in guide
 ```
 
-```{r create guide description file for cleaned data set, include = FALSE, cache = TRUE}
+```{r create guide description file for cleaned data set, eval=FALSE, cache=FALSE, include=FALSE}
 #create guide description file for clean.data.2 
 nvar = ncol(clean.data.2)
 varnames = names(clean.data.2)
@@ -147,7 +150,9 @@ final.data = clean.data.2[signif.Vars]
 write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 remaining
 ```
 
-## Estimation of Mean Using Inverse Probability Weighting
+## GUIDE Methods
+
+### Estimation of Mean Using GUIDE and Inverse Probability Weighting
 A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean, where we simply ignore missing values in INTP, and the simple weighted estimate of the mean.
 
 ```{r IPW Mean Estimation, echo = FALSE, cache = TRUE}
@@ -176,8 +181,7 @@ kable(results, digits = 2,
 ```
 
 
-
-## Estimation of Mean Using Imputation Methods
+### Estimation of Mean Using GUIDE Imputation
 ```{r Guide Tree and Forest Imputation, echo = FALSE, cache = TRUE}
 zreg = read.table("regFit.txt", header = T)
 yhat = zreg$predicted
@@ -193,7 +197,66 @@ reg.table = data.frame("tree" = imputed.tree,
 kable(reg.table, digits = 3, col.names = c("Tree Estimate", "Forest Estimate"))
 ```
 
+## Adjustment to Data Set
+In the middle of the project, it has come to my attention that there were some very young people surveyed by the ACS. For the remainder of the analysis methods, people younger than 15 years old will be removed from the data set. With these observations removed, there are now 57411 rows and 77 columns. I have chosen not to redo the GUIDE analysis at this time because redoing all the calculations will cost at least 12 hours of cpu runtime, and there is still plenty left to do in the project. I anticipate the guide methods will result in a *lower estimations of the mean* than the following methods will because it includes these younger members. These younger members will most likely have lower values for variables important to predicting INTP such as annual income. With that being said, the GUIDE methods do not produce unreasonably low estimates; however, we will acknowledge this bias when making conclusions about the mean of INTP after other methods have been considered.
+
+```{r data clean for rest of methods, cache = TRUE, include = FALSE}
+data = read_csv("psam_p47.csv", guess_max = 10000)
+data = data[!is.na(data$INTP),] #removes people younger than 15 from data set
+
+#all flag variables start with an F, but some other columns might be absorbed too
+possible.flag.vars = names(data %>% 
+  select(starts_with("F"))) 
+
+non.flag.vars = "FOD2P" #variable starting with F that isn't a flag variable
+flag.vars = possible.flag.vars[!(possible.flag.vars %in% non.flag.vars)] #removes none-flag vars 
+actual.vars = sub('.','',flag.vars) #removes leading F in flag variables
+act.vars.in.data.logi = actual.vars %in% names(data) #not all of the real variables exist in the person data set
+
+#update vectors to contain only the variables present in the data set for both the flag variables and the regular variable
+flag.vars = flag.vars[act.vars.in.data.logi]
+actual.vars = actual.vars[act.vars.in.data.logi]
+index = 1 #will be used to index into actual.vars in the for loop 
+
+#eplace value with NA if flag variable is one 
+for(var in flag.vars){
+flag.var.one = data[,var] == 1
+data[,actual.vars[index]][flag.var.one] <-  NA
+index = index + 1
+}
+
+vars.to.drop = c("ADJINC", "DIVISION", "FANCP", "REGION", "RT", "SERIALNO", "SPORDER", "ST")
+clean.data.1 = data %>% 
+  select(-all_of(vars.to.drop)) %>% 
+  select(-num_range("PWGTP", 1:80))
+
+num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP", "CITWP", "MARHYP", "YOEP") #numerical variables 
+varnames.clean = names(clean.data.1) #get column names of clean data frame
+cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
+
+#this data set has correct column types 
+final.data = clean.data.1 %>% 
+  mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
+  mutate(across(all_of(cat.vars), as.character)) #changes type to character
+
+signifVarsOneString = read_lines("cleanDataFinal.txt", skip = 4, n_max = 1)
+signif.Vars = strsplit(signifVarsOneString, split = " ")[[1]]
+signif.Vars[78] = "FINTP" #dont want to remove this
+final.data = final.data[signif.Vars] ##57411 by 77
+dim.final.data = dim(final.data)
+```
+
+## Estimation Using RPART and CTREE
+```{r rpart, cache = TRUE, echo = FALSE}
+rp = rpart(FINTP ~ . - INTP - PWGTP, data = final.data, method = "anova")
+plot(rp,compress=TRUE,margin=0.1)
+text(rp)
+p = predict(rp)
+w = final.data$PWGTP
+y = final.data$INTP
+gp = !is.na(y)
+ipw =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 
 
-
+```
 
