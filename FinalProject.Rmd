@@ -16,6 +16,7 @@ library(knitr)
 library(magrittr)
 library(rpart)
 library(rpart.plot)
+library(gt)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
@@ -76,7 +77,7 @@ missing.vals.logi = apply(clean.data.1,2, is.na)
 prop.missing.vals = apply(missing.vals.logi, 2, sum) / dim.clean.data.1[1]
 large.prop.missing.vals = prop.missing.vals[prop.missing.vals > 0.5]
 top.ten.missing.vals = sort(large.prop.missing.vals, decreasing = TRUE)[1:10]
-kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3)
+kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3, label = "Figure 1")
 ```
 
 ```{r Variable Type Correction, include=FALSE, cache = TRUE}
@@ -89,7 +90,7 @@ clean.data.2 = clean.data.1 %>%
   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
 
-write_csv(clean.data.2, "cleanData.csv") #export clean data (200 variables) file to use in guide
+#write_csv(clean.data.2, "cleanData.csv") #export clean data (200 variables) file to use in guide
 ```
 
 
@@ -120,7 +121,7 @@ row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
 Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in the following figure. After excluding the unimportant variables, the data set now contains 77 variables that will be used in the subsequent analysis.
 
-```{r Plot Importance Scores, echo=FALSE, cache=FALSE}
+```{r Plot Importance Scores, echo=FALSE, cache=TRUE}
 par(las=1,mar=c(5,12,4,2),cex=0.75)
 leg.col <- c("orange","yellow")
 leg.txt <- c("highly important","likely important")
@@ -136,6 +137,7 @@ barplot(rev(score[1:20]),names.arg=rev(vars[1:20]),
 col=rev(barcol[1:20]),horiz=TRUE,xlab="GUIDE importance scores", main = "Top 20 Important Variables")
 abline(v=1,col="red",lty=2)
 legend("bottomright",legend=leg.txt,fill=leg.col)
+
 
 ```
 
@@ -153,7 +155,7 @@ write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 re
 
 ## GUIDE Methods
 
-### Estimation of Mean Using GUIDE and Inverse Probability Weighting
+#### Estimation of Mean Using GUIDE and Inverse Probability Weighting
 A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean, where we simply ignore missing values in INTP, and the simple weighted estimate of the mean.
 
 ```{r IPW Mean Estimation, echo = FALSE, cache = TRUE}
@@ -175,14 +177,23 @@ simple = (sum(w[g]*clean.data.2$INTP[g]))/sum(w[g])
 results = data.frame("GUIDE Tree Prediction" = ipw, 
                      "GUIDE Forest Prediction" = ipw.forest,
                      "Simple Weighted Sum" = simple,
-                     "Ignore Missing Values" = naive.mean)
+                     "Niave Mean" = naive.mean)
 
 kable(results, digits = 2,
       col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Simple Weighted Sum", "Niave Mean"))
+
+
+# gt(results) %>% 
+#   cols_label("GUIDE.Tree.Prediction" = "GUIDE Tree Prediction",
+#              "GUIDE.Forest.Prediction" = "GUIDE Forest Prediction",
+#              "Simple.Weighted.Sum" = "Simple Weighted Sum",
+#              "Niave.Mean" = "Niave Mean") %>% 
+#   tab_header(title = "GUIDE IPW Methods",
+#              subtitle = "Figure 1")
 ```
 
 
-### Estimation of Mean Using GUIDE Imputation
+#### Estimation of Mean Using GUIDE Imputation
 ```{r Guide Tree and Forest Imputation, echo = FALSE, cache = TRUE}
 zreg = read.table("regFit.txt", header = T)
 yhat = zreg$predicted
@@ -238,7 +249,7 @@ cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical vari
 #this data set has correct column types 
 final.data = clean.data.1 %>% 
   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
-  mutate(across(all_of(cat.vars), as.character)) #changes type to character
+  mutate(across(all_of(cat.vars), as.factor)) #change to factor
 
 signifVarsOneString = read_lines("cleanDataFinal.txt", skip = 4, n_max = 1)
 signif.Vars = strsplit(signifVarsOneString, split = " ")[[1]]
@@ -247,7 +258,9 @@ final.data = final.data[signif.Vars] ##57411 by 77
 dim.final.data = dim(final.data)
 ```
 
-## IPW Estimation Using RPART and CTREE
+## RPART
+
+#### IPW with RPART
 The best RPART tree includes the variable ANC1P; however, this variable has greater than 52 levels, and thus is not useful when looking at a plot of the tree. Even changing text arguments will not result in a usable plot. This is also the case for the variable SOCP when ANC1P is removed from the analysis.
 
 In order to give a simple, usable graph for an RPART tree, I have removed these variables *from the diagram only.* Note that I kept the best rpart tree in order to estimate the mean of INTP using the IPW method. The best RPART tree uses FHINS6P, ANC1P, and NWLA as split variables.
@@ -258,7 +271,7 @@ temp = final.data %>%
 
 rp.tree = rpart(FINTP ~ . - INTP - PWGTP, data = temp, method = "anova") #simple graph
 rp.real = rpart(FINTP ~. - INTP - PWGTP, data = final.data, method = "anova") #usef for estimate
-rpart.plot(rp.tree)
+rpart.plot(rp.tree, main = "RPART Tree For Estimating Probability of Non-Missing INTP")
 p = predict(rp.real)
 w = final.data$PWGTP
 y = final.data$INTP
@@ -266,3 +279,108 @@ gp = !is.na(y)
 ipw.rpart =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 ```
 
+#### RPART Imputation Estimation
+```{r rpart imputed, cache = TRUE, echo = FALSE}
+temp = final.data %>% 
+  select(-ANC1P) %>% 
+  select(-FINTP)
+
+rp.imp = rpart(INTP ~ ., weight = PWGTP, data = temp, method = "anova")
+rpart.plot(rp.imp, main = "RPART Tree for Estimating INTP")
+w = final.data$PWGTP
+y = final.data$INTP
+miss = is.na(y)
+yhat = predict(rp.imp, newdata = temp)
+rp.estimate =  (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
+```
+
+#### RPART Estimates of INTP
+```{r RPART Results, echo=FALSE, cache=FALSE}
+x = tibble("RPART IPW" = ipw.rpart,
+           "RPART Impute" = rp.estimate)
+kable(x)
+```
+
+## CTREE
+I have removed categorical variables with greater than 31 levels in order to use CTREE. Note that in the regression tree, rows with missing INTP values have been removed as CTREE can not handle missing values in the response variable.
+```{r CTREE IPW, echo = FALSE, cache = TRUE}
+
+#if prediction file exists, read the data from that. otherwise run ctree algorithm
+if(file.exists("ctreePred.txt")){
+  table = read_table("ctreePred.txt", col_types = "i")
+  p = table$predicted
+}else{
+  fmla = formula(FINTP ~. - INTP - PWGTP)
+  ct = ctree(fmla, data = final.data.factor) 
+  p = as.numeric(predict(ct))
+  ctree.results = tibble("predicted" = p)
+  write_csv(ctree.results, file = "ctreePred.txt")
+}
+
+#plot(ct, type = "simple", drop_terminal = T) plot not useful.
+
+#ipw method 
+w = final.data$PWGTP
+y = final.data$INTP
+gp = !is.na(y)
+ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
+
+```
+
+```{r CTREE Regression, echo = FALSE, cache = TRUE}
+final.data.no.missing = final.data[!is.na(final.data$INTP),]
+
+#find variables that have greater than 31 levels
+# for(var in names(final.data.no.missing)){
+#   if(is.factor(final.data.no.missing[[var]])){
+#    if(nlevels(final.data.no.missing[[var]]) > 31){
+#      print(var)
+#    }
+#   }
+# }
+
+#variables with greater than 31 levels
+high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", "SOCP")
+no.high.level = final.data.no.missing %>% 
+  select(-all_of(high.level.vars))
+
+if(file.exists("ctreeRegYHAT.txt")){
+  table = read_table("ctreeRegYHAT.txt", col_types = "i")
+  yhat = test$yhat
+}else{
+  ct.reg = ctree(INTP ~. - FINTP, weights = no.high.level$PWGTP, data = no.high.level)
+  yhat = predict(ct.reg, newdata = no.high.level)
+  ct.reg.results = tibble("yhat" = yhat)
+  write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
+}
+
+w = no.high.level$PWGTP
+y = no.high.level$INTP
+miss = is.na(y)
+ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
+print(ct.reg.est)
+
+```
+
+
+```{r Missing Value Imputation}
+
+```
+
+```{r Logisitic Regression}
+
+```
+
+
+```{r randomForest Regression}
+
+```
+
+```{r CFOREST Regression}
+
+```
+
+### stuff do to at the end
+add in latex formula for ipw and imputed method 
+make sure all graphs have titels and labels 
+organize project in most logical way
