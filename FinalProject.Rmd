@@ -372,29 +372,34 @@ kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estim
 ```
 
 ## Imputation with MICE
-I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and sometimes it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I then all variables I removed to run MICE back in and did mode imputation of missing values, as these were all categorical variables.
-```{r Missing Value Imputation, echo = FALSE, cache = TRUE}
+I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and most of the time it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I tried to increase the number of iterations in glm.fit from 25 to 50, but that did not work for this variable. After MICE finished running, I added back the excluded variables and did imputation with the mode of the categorical variables.
+```{r Missing Value Imputation, cache=FALSE, include=FALSE}
 
+#read mice data from saved file if it exists (MICE takes a long time to run)
 if(file.exists("miceDataNoNa.csv")){
   mice.data = read_csv("miceDataNoNA.csv")
+  mice.data = mice.data %>% 
+    mutate(across(any_of(num.vars), as.double)) %>% #changes type to double 
+    mutate(across(any_of(cat.vars), as.factor))
 }else{
-  y = no.high.level$INTP 
-  no.intp = no.high.level %>% select(-INTP) %>% select(-JWRIP)
-  mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000)
-  mice.data = complete(mice.result,1)
-  mice.copy = mice.data
+  y =final.data$INTP 
+  no.intp = final.data %>% select(-INTP) %>% select(-JWRIP) %>% select(-all_of(high.level.vars))
+  #mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000, control = list(maxit = 50))
+  mice.data = complete(mice.result,1) #extract results from mice
+  mice.copy = mice.data #did this orginaly so I wouldnt mess up the imputed data set 
   
   #add back variables that were taken out to run mice
   for(var in high.level.vars){
-    mice.copy[var] = final.data.no.missing[[var]]
+    mice.copy[var] = final.data[[var]]
   }
   
-  mice.copy$INTP = final.data.no.missing$INTP
-  mice.copy$JWRIP = final.data.no.missing$JWRIP
+  #add back variables that were taken out to run mice
+  mice.copy$INTP = final.data$INTP
+  mice.copy$JWRIP = final.data$JWRIP
   
   #impute with mode
   mice.copy = impute(mice.copy)
-  colSums(is.na(mice.copy))
+  #colSums(is.na(mice.copy))
   write_csv(mice.copy, file = "miceDataNoNA.csv")
   
 }
@@ -403,20 +408,9 @@ if(file.exists("miceDataNoNa.csv")){
 ```
 
 
-```{r mode imputation, cache = TRUE, echo = FALSE}
-
-
-
-```
-
-
-```{r}
-
-
-```
-
 ```{r Logisitic Regression}
-
+#log = glm(FINTP ~ . - INTP - PWGTP, data = mice.data, family = "binomial")
+#pi = predict(log, newdata = mice.data, type = "response") #P(FINTP = 1)
 ```
 
 
