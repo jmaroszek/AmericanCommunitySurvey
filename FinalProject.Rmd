@@ -17,6 +17,8 @@ library(magrittr)
 library(rpart)
 library(rpart.plot)
 library(gt)
+library(mice)
+library(imputeMissings)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
@@ -327,7 +329,7 @@ ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 
 ```
 
-```{r CTREE Regression, echo = FALSE, cache = TRUE}
+```{r CTREE Regression, echo = FALSE, cache = T}
 final.data.no.missing = final.data[!is.na(final.data$INTP),]
 
 #find variables that have greater than 31 levels
@@ -344,9 +346,11 @@ high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", 
 no.high.level = final.data.no.missing %>% 
   select(-all_of(high.level.vars))
 
+
+
 if(file.exists("ctreeRegYHAT.txt")){
   table = read_table("ctreeRegYHAT.txt", col_types = "i")
-  yhat = test$yhat
+  yhat = table$yhat
 }else{
   ct.reg = ctree(INTP ~. - FINTP, weights = no.high.level$PWGTP, data = no.high.level)
   yhat = predict(ct.reg, newdata = no.high.level)
@@ -358,12 +362,56 @@ w = no.high.level$PWGTP
 y = no.high.level$INTP
 miss = is.na(y)
 ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
-print(ct.reg.est)
+```
+
+```{r ctree results, cache = TRUE, echo = FALSE}
+ctree.results = tibble("IPW" = ipw.ct,
+                       "Reg" = ct.reg.est)
+kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estimate"), digits = 2)
+
+```
+
+## Imputation with MICE
+I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and sometimes it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I then all variables I removed to run MICE back in and did mode imputation of missing values, as these were all categorical variables.
+```{r Missing Value Imputation, echo = FALSE, cache = TRUE}
+
+if(file.exists("miceDataNoNa.csv")){
+  mice.data = read_csv("miceDataNoNA.csv")
+}else{
+  y = no.high.level$INTP 
+  no.intp = no.high.level %>% select(-INTP) %>% select(-JWRIP)
+  mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000)
+  mice.data = complete(mice.result,1)
+  mice.copy = mice.data
+  
+  #add back variables that were taken out to run mice
+  for(var in high.level.vars){
+    mice.copy[var] = final.data.no.missing[[var]]
+  }
+  
+  mice.copy$INTP = final.data.no.missing$INTP
+  mice.copy$JWRIP = final.data.no.missing$JWRIP
+  
+  #impute with mode
+  mice.copy = impute(mice.copy)
+  colSums(is.na(mice.copy))
+  write_csv(mice.copy, file = "miceDataNoNA.csv")
+  
+}
+
 
 ```
 
 
-```{r Missing Value Imputation}
+```{r mode imputation, cache = TRUE, echo = FALSE}
+
+
+
+```
+
+
+```{r}
+
 
 ```
 
