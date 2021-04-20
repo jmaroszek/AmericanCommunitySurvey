@@ -333,16 +333,22 @@ ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 final.data.no.missing = final.data[!is.na(final.data$INTP),]
 
 #find variables that have greater than 31 levels
-# for(var in names(final.data.no.missing)){
-#   if(is.factor(final.data.no.missing[[var]])){
-#    if(nlevels(final.data.no.missing[[var]]) > 31){
-#      print(var)
-#    }
-#   }
-# }
+for(var in names(final.data.no.missing)){
+  if(is.factor(final.data.no.missing[[var]])){
+   if(nlevels(final.data.no.missing[[var]]) > 31){
+     print(paste(var, nlevels(final.data.no.missing[[var]])))
+   }
+  }
+}
 
 #variables with greater than 31 levels
 high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", "SOCP")
+num.levels = c(49,206,170,270,270,526,49,526)
+table = data.frame("Variable" = high.level.vars,
+                   "Levels" = num.levels)
+
+kable(table, caption = "High Level Variables (levels > 31)")
+
 no.high.level = final.data.no.missing %>% 
   select(-all_of(high.level.vars))
 
@@ -362,6 +368,10 @@ w = no.high.level$PWGTP
 y = no.high.level$INTP
 miss = is.na(y)
 ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
+```
+
+```{r}
+ 
 ```
 
 ```{r ctree results, cache = TRUE, echo = FALSE}
@@ -384,7 +394,7 @@ if(file.exists("miceDataNoNa.csv")){
 }else{
   y =final.data$INTP 
   no.intp = final.data %>% select(-INTP) %>% select(-JWRIP) %>% select(-all_of(high.level.vars))
-  #mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000, control = list(maxit = 50))
+  mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000, control = list(maxit = 50))
   mice.data = complete(mice.result,1) #extract results from mice
   mice.copy = mice.data #did this orginaly so I wouldnt mess up the imputed data set 
   
@@ -394,11 +404,11 @@ if(file.exists("miceDataNoNa.csv")){
   }
   
   #add back variables that were taken out to run mice
-  mice.copy$INTP = final.data$INTP
   mice.copy$JWRIP = final.data$JWRIP
   
   #impute with mode
   mice.copy = impute(mice.copy)
+  mice.copy$INTP = final.data$INTP #add this after imputation so missing values not compromised
   #colSums(is.na(mice.copy))
   write_csv(mice.copy, file = "miceDataNoNA.csv")
   
@@ -407,12 +417,24 @@ if(file.exists("miceDataNoNa.csv")){
 
 ```
 
+I attempted to fit a logistic regression model with all the variables present; however, after a significant run time, it turns out that including the high level categorical variables resulted in a rank deficient matrix, and thus produced an unreliably and severely low estimate. I ran the logistic model again with the high level categorical variables removed.
 
-```{r Logisitic Regression}
-#log = glm(FINTP ~ . - INTP - PWGTP, data = mice.data, family = "binomial")
-#pi = predict(log, newdata = mice.data, type = "response") #P(FINTP = 1)
+```{r Logisitic Regression, echo=FALSE, warning=FALSE, cache=FALSE}
+mice.data = mice.data %>% mutate(INTP = final.data$INTP) #restore missing values to INTP 
+
+all.obs.no.high.level = mice.data %>% select(-all_of(high.level.vars)) %>% select(-MSP)
+
+log = glm(FINTP ~ . - INTP - PWGTP, data = all.obs.no.high.level, family = "binomial", control = list(trace = FALSE, maxit = 50))
+probmissing = predict(log, newdata = mice.data, type = "response") #P(FINTP = 1) which is prob that FINTP is imputed in original and thus essentially MISSING  (so this var is not actually pi. it is 1- pi because pi refers to P(FINTP = 1))
+p =  1-probmissing
+y = all.obs.no.high.level$INTP
+gp = !is.na(y)
+w = all.obs.no.high.level$PWGTP
+log.est = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
+
+df = data.frame(x= log.est)
+kable(df, col.names = "Logistic Regression Estimate")
 ```
-
 
 ```{r randomForest Regression}
 
