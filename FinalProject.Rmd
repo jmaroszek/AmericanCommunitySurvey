@@ -19,6 +19,7 @@ library(rpart.plot)
 library(gt)
 library(mice)
 library(imputeMissings)
+library(randomForest)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. There are also a large number of missing values in this data set. I will be using multiple methods of imputation to correct for these deficiencies, as well as multiple methods to predict INTP.
@@ -310,7 +311,7 @@ I have removed categorical variables with greater than 31 levels in order to use
 #if prediction file exists, read the data from that. otherwise run ctree algorithm
 if(file.exists("ctreePred.txt")){
   table = read_table("ctreePred.txt", col_types = "i")
-  p = table$predicted
+  p = table$predicted 
 }else{
   fmla = formula(FINTP ~. - INTP - PWGTP)
   ct = ctree(fmla, data = final.data.factor) 
@@ -319,6 +320,7 @@ if(file.exists("ctreePred.txt")){
   write_csv(ctree.results, file = "ctreePred.txt")
 }
 
+
 #plot(ct, type = "simple", drop_terminal = T) plot not useful.
 
 #ipw method 
@@ -326,20 +328,20 @@ w = final.data$PWGTP
 y = final.data$INTP
 gp = !is.na(y)
 ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
-
+ipw.ct
 ```
 
 ```{r CTREE Regression, echo = FALSE, cache = T}
 final.data.no.missing = final.data[!is.na(final.data$INTP),]
 
 #find variables that have greater than 31 levels
-for(var in names(final.data.no.missing)){
-  if(is.factor(final.data.no.missing[[var]])){
-   if(nlevels(final.data.no.missing[[var]]) > 31){
-     print(paste(var, nlevels(final.data.no.missing[[var]])))
-   }
-  }
-}
+# for(var in names(final.data.no.missing)){
+#   if(is.factor(final.data.no.missing[[var]])){
+#    if(nlevels(final.data.no.missing[[var]]) > 31){
+#      print(paste(var, nlevels(final.data.no.missing[[var]])))
+#    }
+#   }
+# }
 
 #variables with greater than 31 levels
 high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", "SOCP")
@@ -370,9 +372,6 @@ miss = is.na(y)
 ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
 ```
 
-```{r}
- 
-```
 
 ```{r ctree results, cache = TRUE, echo = FALSE}
 ctree.results = tibble("IPW" = ipw.ct,
@@ -417,34 +416,59 @@ if(file.exists("miceDataNoNa.csv")){
 
 ```
 
+## Logistic Regression
 I attempted to fit a logistic regression model with all the variables present; however, after a significant run time, it turns out that including the high level categorical variables resulted in a rank deficient matrix, and thus produced an unreliably and severely low estimate. I ran the logistic model again with the high level categorical variables removed.
 
-```{r Logisitic Regression, echo=FALSE, warning=FALSE, cache=FALSE}
+```{r Logisitic Regression, echo=FALSE, warning=FALSE, cache=TRUE}
 mice.data = mice.data %>% mutate(INTP = final.data$INTP) #restore missing values to INTP 
-
 all.obs.no.high.level = mice.data %>% select(-all_of(high.level.vars)) %>% select(-MSP)
 
-log = glm(FINTP ~ . - INTP - PWGTP, data = all.obs.no.high.level, family = "binomial", control = list(trace = FALSE, maxit = 50))
-probmissing = predict(log, newdata = mice.data, type = "response") #P(FINTP = 1) which is prob that FINTP is imputed in original and thus essentially MISSING  (so this var is not actually pi. it is 1- pi because pi refers to P(FINTP = 1))
+
+if(file.exists("logPredProbs.csv")){
+  probmissing = read_csv("logPredProbs.csv",col_types = cols())
+  probmissing = probmissing$probmissing
+}else{
+  #data in log was orginally something besides mice.data I think it was no.high.level.all.obs
+  log = glm(FINTP ~ . - INTP - PWGTP, data = mice.data, family = "binomial", control = list(trace = TRUE, maxit = 50))
+  probmissing = predict(log, newdata = mice.data, type = "response") 
+  #write_csv(data.frame("probmissing" = probmissing), file = "logPredProbs.csv")
+}
+
+#P(FINTP = 1) which is prob that FINTP is imputed in original and thus essentially MISSING  (so this var is not actually pi. it is 1- pi because pi refers to P(FINTP = 1))
 p =  1-probmissing
 y = all.obs.no.high.level$INTP
 gp = !is.na(y)
 w = all.obs.no.high.level$PWGTP
 log.est = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
-
 df = data.frame(x= log.est)
 kable(df, col.names = "Logistic Regression Estimate")
 ```
 
 ```{r randomForest Regression}
+#removes high level vars, and moves INTP to first column
+rf.data = mice.data %>% select(-all_of(high.level.vars)) %>%  select(INTP, everything())
+rf.data = rf.data[!is.na(rf.data$INTP),] #remove missing intp rows
+w = rf.data$PWGTP #get weights before removed from data set 
+rf.data = rf.data %>% select(-c(PWGTP,FINTP)) #remove weight and flag var
+predictors = rf.data[,2:dim(rf.data)[2]] #exclude first column from predictor (INTP)
+rf = randomForest(y = rf.data$INTP, x = predictors, weights = w, do.trace = TRUE)
 
 ```
 
-```{r CFOREST Regression}
+```{r CFOREST Regression, echo = FALSE, cache = TRUE}
 
+
+# cf = cforest(y = intp, x = predictors, data = cforest.data, weights = cforest.data$PWGTP)
+# w = cforest.data$PWGTP
+# y = cforest.data$INTP
+# yhat = predict(cf, newdata = cforest.data)
+# miss = is.na(y)
+# ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
 ```
 
 ### stuff do to at the end
 add in latex formula for ipw and imputed method 
 make sure all graphs have titels and labels 
 organize project in most logical way
+note that ipw method in ctree isnt working as expected (look at p in the pred file) but the estimate is somehow very reasonable.
+p in logitic regression is basically all ones for some reason
