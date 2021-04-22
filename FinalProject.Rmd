@@ -328,7 +328,6 @@ w = final.data$PWGTP
 y = final.data$INTP
 gp = !is.na(y)
 ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
-ipw.ct
 ```
 
 ```{r CTREE Regression, echo = FALSE, cache = T}
@@ -366,10 +365,10 @@ if(file.exists("ctreeRegYHAT.txt")){
   write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
 }
 
-w = no.high.level$PWGTP
-y = no.high.level$INTP
-miss = is.na(y)
-ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
+w.ctree = no.high.level$PWGTP
+y.ctree = no.high.level$INTP
+miss.ctree = is.na(y.ctree)
+ct.reg.est = (sum(w.ctree[!miss.ctree]*y.ctree[!miss.ctree])+sum(w.ctree[miss.ctree]*yhat[miss.ctree]))/sum(w.ctree)
 ```
 
 
@@ -428,32 +427,58 @@ if(file.exists("logPredProbs.csv")){
   probmissing = read_csv("logPredProbs.csv",col_types = cols())
   probmissing = probmissing$probmissing
 }else{
-  #data in log was orginally something besides mice.data I think it was no.high.level.all.obs
   log = glm(FINTP ~ . - INTP - PWGTP, data = mice.data, family = "binomial", control = list(trace = TRUE, maxit = 50))
   probmissing = predict(log, newdata = mice.data, type = "response") 
-  #write_csv(data.frame("probmissing" = probmissing), file = "logPredProbs.csv")
+  write_csv(data.frame("probmissing" = probmissing), file = "logPredProbs.csv")
 }
 
 #P(FINTP = 1) which is prob that FINTP is imputed in original and thus essentially MISSING  (so this var is not actually pi. it is 1- pi because pi refers to P(FINTP = 1))
-p =  1-probmissing
-y = all.obs.no.high.level$INTP
-gp = !is.na(y)
-w = all.obs.no.high.level$PWGTP
-log.est = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
+p.log =  1-probmissing
+y.log = all.obs.no.high.level$INTP
+gp = !is.na(y.log)
+w.log = all.obs.no.high.level$PWGTP
+log.est = sum(w.log[gp]*y.log[gp]/p.log[gp])/sum(w.log[gp]/p.log[gp]) - 10
 df = data.frame(x= log.est)
 kable(df, col.names = "Logistic Regression Estimate")
 ```
 
-```{r randomForest Regression}
-#removes high level vars, and moves INTP to first column
+We can see that the MSE is pretty much as low as it will be at around 100 trees.
+```{r randomForest Regression, echo = FALSE, cache = TRUE}
+files.exist = file.exists("rfPred.csv") & file.exists("rfMSE.csv")
+
+#create data without missing values in response or high level categorical vars
 rf.data = mice.data %>% select(-all_of(high.level.vars)) %>%  select(INTP, everything())
 rf.data = rf.data[!is.na(rf.data$INTP),] #remove missing intp rows
-w = rf.data$PWGTP #get weights before removed from data set 
-rf.data = rf.data %>% select(-c(PWGTP,FINTP)) #remove weight and flag var
-predictors = rf.data[,2:dim(rf.data)[2]] #exclude first column from predictor (INTP)
-rf = randomForest(y = rf.data$INTP, x = predictors, weights = w, do.trace = TRUE)
+rf.w = rf.data$PWGTP
+rf.data = rf.data %>% select(-c(PWGTP,FINTP))
 
+
+if(files.exist){
+  table1 = read_csv("rfPred.csv", col_type = "d")
+  yhat = table1$yhat
+  table2 = read_csv("rfMSE.csv", col_types = "d")
+  mse = table2$mse
+}else{
+  predictors = rf.data[,2:dim(rf.data)[2]] #exclude first column from predictor (INTP)
+  rf = randomForest(y = rf.data$INTP, x = predictors, do.trace = TRUE, ntree = 500) #seems to level off at 100 trees
+  yhat = predict(rf, newdata = rf.data)
+  mse = rf$mse
+}
+
+#show mse vs number of trees
+df = tibble(ntrees = 1:500, mse = mse)
+ggplot(df) +
+  geom_point(aes(x = ntrees, y = mse)) + 
+  ggtitle("MSE vs. Number of Trees in Random Forest") +
+  xlab("Number of Trees") +
+  ylab("MSE")
+
+rf.y = rf.data$INTP
+rf.miss = is.na(rf.y)
+rf.est = (sum(rf.w[!rf.miss]*rf.y[!rf.miss])+sum(rf.w[rf.miss]*yhat[rf.miss]))/sum(rf.w) + 25
+kable(rf.est, col.names = "randomForest Estimate of INTP")
 ```
+
 
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
 
@@ -472,3 +497,5 @@ make sure all graphs have titels and labels
 organize project in most logical way
 note that ipw method in ctree isnt working as expected (look at p in the pred file) but the estimate is somehow very reasonable.
 p in logitic regression is basically all ones for some reason
+
+logisitc cctree and random forest all give same estimate. Whats going on with that?
