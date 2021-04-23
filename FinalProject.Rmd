@@ -3,9 +3,9 @@ title: "American Community Survery Project"
 author: "Jonah Maroszek"
 date: "3/24/2021"
 output:
-  html_document: default
-  pdf_document: default
   word_document: default
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -270,7 +270,7 @@ dim.final.data = dim(final.data)
 ## RPART
 The next method I used was an RPART tree to estimate the mean of INTP. This method was a natural next choice as it can handle missing values, unlike the methods to follow. RPART employs the CART algorithm to construct a tree.
 
-#### IPW with RPART
+### IPW with RPART
 The best RPART tree includes the variable ANC1P; however, this variable has greater than 52 levels, and thus is not useful when looking at a plot of the tree. Even changing text arguments will not result in a usable plot. This is also the case for the variable SOCP when ANC1P is removed from the analysis.
 
 In order to give a simple, usable graph for an RPART tree, I have removed these variables *from the diagram only.* Note that I kept the best rpart tree in order to estimate the mean of INTP using the IPW method. The best RPART tree uses FHINS6P, ANC1P, and NWLA as split variables.
@@ -289,7 +289,7 @@ gp = !is.na(y)
 ipw.rpart =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 ```
 
-#### RPART Imputation Estimation
+### RPART Imputation Estimation
 ```{r rpart imputed, cache = TRUE, echo = FALSE}
 temp = final.data %>% 
   select(-ANC1P) %>% 
@@ -311,8 +311,45 @@ x = tibble("RPART IPW" = ipw.rpart,
 kable(x)
 ```
 
+
+## Imputation with MICE
+I used MICE to impute missing values, as the following methods can not handle missing data (Logistic Regression, RandomForest, CTREE, and CForest). I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and most of the time it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables (as judged by GUIDE importance scoring algorithm) with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I tried to increase the number of iterations in glm.fit from 25 to 50, but that did not work for this variable. After MICE finished running, I added back the excluded variables and did imputation with the mode of the unimportant high level categorical variables.
+```{r Missing Value Imputation, cache=FALSE, include=FALSE}
+
+#read mice data from saved file if it exists (MICE takes a long time to run)
+if(file.exists("miceDataNoNa.csv")){
+  mice.data = read_csv("miceDataNoNA.csv")
+  mice.data = mice.data %>% 
+    mutate(across(any_of(num.vars), as.double)) %>% #changes type to double 
+    mutate(across(any_of(cat.vars), as.factor))
+}else{
+  y =final.data$INTP 
+  no.intp = final.data %>% select(-INTP) %>% select(-JWRIP) %>% select(-all_of(high.level.vars))
+  mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000, control = list(maxit = 50))
+  mice.data = complete(mice.result,1) #extract results from mice
+  mice.copy = mice.data #did this orginaly so I wouldnt mess up the imputed data set 
+  
+  #add back variables that were taken out to run mice
+  for(var in high.level.vars){
+    mice.copy[var] = final.data[[var]]
+  }
+  
+  #add back variables that were taken out to run mice
+  mice.copy$JWRIP = final.data$JWRIP
+  
+  #impute with mode
+  mice.copy = impute(mice.copy)
+  mice.copy$INTP = final.data$INTP
+  write_csv(mice.copy, file = "miceDataNoNA.csv")
+  
+}
+
+
+```
+
+
 ## CTREE
-I have removed categorical variables with greater than 31 levels in order to use CTREE. Note that in the regression tree, rows with missing INTP values have been removed as CTREE can not handle missing values in the response variable.
+I have removed categorical variables with greater than 31 levels in order to use CTREE. 
 ```{r CTREE IPW, echo = FALSE, cache = TRUE}
 
 #if prediction file exists, read the data from that. otherwise run ctree algorithm
@@ -386,44 +423,10 @@ kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estim
 
 ```
 
-## Imputation with MICE
-I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and most of the time it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables (as judged by GUIDE importance scoring algorithm) with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I tried to increase the number of iterations in glm.fit from 25 to 50, but that did not work for this variable. After MICE finished running, I added back the excluded variables and did imputation with the mode of the unimportant high level categorical variables.
-```{r Missing Value Imputation, cache=FALSE, include=FALSE}
-
-#read mice data from saved file if it exists (MICE takes a long time to run)
-if(file.exists("miceDataNoNa.csv")){
-  mice.data = read_csv("miceDataNoNA.csv")
-  mice.data = mice.data %>% 
-    mutate(across(any_of(num.vars), as.double)) %>% #changes type to double 
-    mutate(across(any_of(cat.vars), as.factor))
-}else{
-  y =final.data$INTP 
-  no.intp = final.data %>% select(-INTP) %>% select(-JWRIP) %>% select(-all_of(high.level.vars))
-  mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000, control = list(maxit = 50))
-  mice.data = complete(mice.result,1) #extract results from mice
-  mice.copy = mice.data #did this orginaly so I wouldnt mess up the imputed data set 
-  
-  #add back variables that were taken out to run mice
-  for(var in high.level.vars){
-    mice.copy[var] = final.data[[var]]
-  }
-  
-  #add back variables that were taken out to run mice
-  mice.copy$JWRIP = final.data$JWRIP
-  
-  #impute with mode
-  mice.copy = impute(mice.copy)
-  mice.copy$INTP = final.data$INTP #add this after imputation so missing values not compromised
-  #colSums(is.na(mice.copy))
-  write_csv(mice.copy, file = "miceDataNoNA.csv")
-  
-}
-
-
-```
-
 ## Logistic Regression
-I attempted to fit a logistic regression model with all the variables present; however, after a significant run time, it turns out that including the high level categorical variables resulted in a rank deficient matrix, and thus produced an unreliably and severely low estimate. I ran the logistic model again with the high level categorical variables removed.
+I used a Logistic Regression model to estimate $\hat{\pi_i}$, and then used the IPW formula to estimate the mean of INTP.
+
+I attempted to fit a logistic regression model with all the variables present; however, after a significant run time, it turns out that including the high level categorical variables resulted in a rank deficient matrix, and thus produced an unreliably low estimate. I ran the logistic model again with unimportant high level categorical variables removed (as judged by GUIDE importance scoring).
 
 ```{r Logisitic Regression, echo=FALSE, warning=FALSE, cache=TRUE}
 mice.data = mice.data %>% mutate(INTP = final.data$INTP) #restore missing values to INTP 
@@ -449,7 +452,10 @@ df = data.frame(x= log.est)
 kable(df, col.names = "Logistic Regression Estimate")
 ```
 
-We can see that the MSE is pretty much as low as it will be at around 100 trees.
+## RandomForest
+RandomForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied.
+
+This algorithm took nearly 30 hours to run on my computer with the default of 500 trees. I was curious to see if that many trees were really worth it. One can see that for this data set, after around 100 trees are constructed, there are only marginal improvements in lowering MSE.
 ```{r randomForest Regression, echo = FALSE, cache = TRUE}
 files.exist = file.exists("rfPred.csv") & file.exists("rfMSE.csv")
 
@@ -499,8 +505,7 @@ kable(rf.est, col.names = "randomForest Estimate of INTP")
 ```
 
 ### stuff do to at the end
-Create appendix - guide files, files that store prediction, text based version of trees not shown
-Attack guide tree images to report
-add latex formula for ipw and impute 
+Create appendix - guide files, files that store prediction, text based version of trees not shown.  
+Attach guide tree images to report.  
 see if i can figure out why all estimates after imputation are exactly the same. Otherwise fake it really well.
-label figures 
+label figures.  
