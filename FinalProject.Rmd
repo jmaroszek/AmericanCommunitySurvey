@@ -495,10 +495,12 @@ kable(rf.est, col.names = "randomForest Estimate of INTP")
 ```
 
 ## CForest
+RandomForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied.
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
 
 #must find missing before imputation to get use out of prediction model 
 y = mice.data$INTP
+w.all = mice.data$PWGTP
 miss = is.na(y)
 
 cforest.data = mice.data %>% 
@@ -518,15 +520,11 @@ if(file.exists("cfPred.csv")){
  write_csv(df, file = "cfPred.csv")
 }
 
-cf.est = (sum(w[!miss]*y[!miss]) + sum(yhat * miss.rows$PWGTP))/sum(w)
-cf.df = tibble("cf.est" = cf.est)
+cf.est = (sum(w.all[!miss]*y[!miss]) + sum(yhat * w))/sum(w.all)
+cf.df = tibble("cf.est" = cf.est) #1665.763
 kable(cf.df, col.names = "CForest Imputation Estimate")
 ```
 
-
-```{r}
-cf.copy = cf
-```
 
 ## Conclusion
 
