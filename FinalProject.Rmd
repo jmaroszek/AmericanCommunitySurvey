@@ -20,6 +20,7 @@ library(gt)
 library(mice)
 library(imputeMissings)
 library(randomForest)
+library(partykit)
 ```
 ## Introduction
 In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. 
@@ -495,6 +496,8 @@ kable(rf.est, col.names = "randomForest Estimate of INTP")
 
 ## CForest
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
+
+#must find missing before imputation to get use out of prediction model 
 y = mice.data$INTP
 miss = is.na(y)
 
@@ -502,12 +505,27 @@ cforest.data = mice.data %>%
   select(-all_of(high.level.vars)) %>% 
   replace_na(list(INTP = ipw.rpart))
 
-w = cforest.data$PWGTP
-cf = cforest(INTP ~ . - FINTP - PWGTP, data = cforest.data, weights = w, ntree = 100, trace = TRUE)
-yhat = predict(cf, newdata = cforest.data)
+if(file.exists("cfPred.csv")){
+  table = read_csv("cfPred.csv", col_types = cols())
+  yhat = table$yhat
+  w = table$weights
+}else{
+  w = cforest.data$PWGTP
+ cf = partykit::cforest(INTP ~ . - FINTP - PWGTP, data = cforest.data, weights = w, ntree = 100, trace = TRUE)
+ miss.rows = cforest.data[miss,] #predict can not allocate enough memory to do yhat on all rows
+ yhat = predict(cf, newdata = miss.rows)
+ df = tibble(yhat = yhat, weights = miss.rows$PWGTP)
+ write_csv(df, file = "cfPred.csv")
+}
 
-cf.est = (sum(w[!miss]*y[!miss]) + sum(w[miss]*yhat[miss]))/sum(w)
-cf.est
+cf.est = (sum(w[!miss]*y[!miss]) + sum(yhat * miss.rows$PWGTP))/sum(w)
+cf.df = tibble("cf.est" = cf.est)
+kable(cf.df, col.names = "CForest Imputation Estimate")
+```
+
+
+```{r}
+cf.copy = cf
 ```
 
 ## Conclusion
