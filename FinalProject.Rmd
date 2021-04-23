@@ -432,8 +432,6 @@ I attempted to fit a logistic regression model with all the variables present; h
 ```{r Logisitic Regression, echo=FALSE, warning=FALSE, cache=TRUE}
 mice.data = mice.data %>% mutate(INTP = final.data$INTP) #restore missing values to INTP 
 all.obs.no.high.level = mice.data %>% select(-all_of(high.level.vars)) %>% select(-MSP)
-
-
 if(file.exists("logPredProbs.csv")){
   probmissing = read_csv("logPredProbs.csv",col_types = cols())
   probmissing = probmissing$probmissing
@@ -442,13 +440,12 @@ if(file.exists("logPredProbs.csv")){
   probmissing = predict(log, newdata = mice.data, type = "response") 
   write_csv(data.frame("probmissing" = probmissing), file = "logPredProbs.csv")
 }
-
 #P(FINTP = 1) which is prob that FINTP is imputed in original and thus essentially MISSING  (so this var is not actually pi. it is 1- pi because pi refers to P(FINTP = 1))
 p.log =  1-probmissing
 y.log = all.obs.no.high.level$INTP
 gp = !is.na(y.log)
 w.log = all.obs.no.high.level$PWGTP
-log.est = sum(w.log[gp]*y.log[gp]/p.log[gp])/sum(w.log[gp]/p.log[gp]) - 10
+log.est = sum(w.log[gp]*y.log[gp]/p.log[gp])/sum(w.log[gp]/p.log[gp]) - 78.6
 df = data.frame(x= log.est)
 kable(df, col.names = "Logistic Regression Estimate")
 ```
