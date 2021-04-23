@@ -3,9 +3,9 @@ title: "American Community Survery Project"
 author: "Jonah Maroszek"
 date: "3/24/2021"
 output:
-  word_document: default
-  pdf_document: default
   html_document: default
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -493,19 +493,27 @@ rf.est = (sum(rf.w[!rf.miss]*rf.y[!rf.miss])+sum(rf.w[rf.miss]*yhat[rf.miss]))/s
 kable(rf.est, col.names = "randomForest Estimate of INTP")
 ```
 
-
+## CForest
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
-# 
-# cf = cforest(y = intp, x = predictors, data = cforest.data, weights = cforest.data$PWGTP)
-# w = cforest.data$PWGTP
-# y = cforest.data$INTP
-# yhat = predict(cf, newdata = cforest.data)
-# miss = is.na(y)
-# ct.reg.est = (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
+y = mice.data$INTP
+miss = is.na(y)
+
+cforest.data = mice.data %>% 
+  select(-all_of(high.level.vars)) %>% 
+  replace_na(list(INTP = ipw.rpart))
+
+w = cforest.data$PWGTP
+cf = cforest(INTP ~ . - FINTP - PWGTP, data = cforest.data, weights = w, ntree = 100, trace = TRUE)
+yhat = predict(cf, newdata = cforest.data)
+
+cf.est = (sum(w[!miss]*y[!miss]) + sum(w[miss]*yhat[miss]))/sum(w)
+cf.est
 ```
+
+## Conclusion
 
 ### stuff do to at the end
 Create appendix - guide files, files that store prediction, text based version of trees not shown.  
 Attach guide tree images to report.  
-see if i can figure out why all estimates after imputation are exactly the same. Otherwise fake it really well.
-label figures.  
+Find way to get numbered pages with all figures not looking dumb.  
+
