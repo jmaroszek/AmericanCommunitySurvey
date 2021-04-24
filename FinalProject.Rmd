@@ -89,7 +89,7 @@ missing.vals.logi = apply(clean.data.1,2, is.na)
 prop.missing.vals = apply(missing.vals.logi, 2, sum) / dim.clean.data.1[1]
 large.prop.missing.vals = prop.missing.vals[prop.missing.vals > 0.5]
 top.ten.missing.vals = sort(large.prop.missing.vals, decreasing = TRUE)[1:10]
-kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3, label = "Figure 1")
+kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3)
 ```
 
 ```{r Variable Type Correction, include=FALSE, cache = TRUE}
@@ -187,11 +187,12 @@ simple = (sum(w[g]*clean.data.2$INTP[g]))/sum(w[g])
 
 results = data.frame("GUIDE Tree Prediction" = ipw, 
                      "GUIDE Forest Prediction" = ipw.forest,
-                     "Simple Weighted Sum" = simple,
-                     "Niave Mean" = naive.mean)
+                     "Simple Weighted Sum" = simple)
 
-kable(results, digits = 2,
-      col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Simple Weighted Sum", "Niave Mean"))
+kable(results, 
+      digits = 2,
+      col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Simple Weighted Sum"), 
+      caption = "GUIDE IPW")
 
 
 # gt(results) %>% 
@@ -220,7 +221,7 @@ reg.table = tibble("tree" = imputed.tree,
                        "forest" = imputed.forest)
 
 
-kable(reg.table, digits = 3, col.names = c("Tree Estimate", "Forest Estimate"))
+kable(reg.table, digits = 3, col.names = c("Tree Estimate", "Forest Estimate"), caption = "GUIDE Imputation")
 ```
 
 
@@ -315,7 +316,7 @@ rp.estimate =  (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
 ```{r RPART Results, echo=FALSE, cache=FALSE}
 x = tibble("RPART IPW" = ipw.rpart,
            "RPART Impute" = rp.estimate)
-kable(x)
+kable(x, caption = "RPART Estimates")
 ```
 
 
@@ -426,7 +427,7 @@ ct.reg.est = (sum(w.ctree[!miss.ctree]*y.ctree[!miss.ctree])+sum(w.ctree[miss.ct
 ```{r ctree results, cache = TRUE, echo = FALSE}
 ctree.results = tibble("IPW" = ipw.ct,
                        "Reg" = ct.reg.est)
-kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estimate"), digits = 2)
+kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estimate"), digits = 2, caption = "CTREE Results")
 
 ```
 
@@ -453,7 +454,7 @@ gp = !is.na(y.log)
 w.log = all.obs.no.high.level$PWGTP
 log.est = sum(w.log[gp]*y.log[gp]/p.log[gp])/sum(w.log[gp]/p.log[gp]) - 78.6
 df = data.frame(x= log.est)
-kable(df, col.names = "Logistic Regression Estimate")
+kable(df, col.names = "Logistic Regression Estimate", caption = "Logistic IPW")
 ```
 
 ## RandomForest
@@ -494,7 +495,7 @@ ggplot(df) +
 rf.y = rf.data$INTP
 rf.miss = is.na(rf.y)
 rf.est = (sum(rf.w[!rf.miss]*rf.y[!rf.miss])+sum(rf.w[rf.miss]*yhat[rf.miss]))/sum(rf.w) + 25.5
-kable(rf.est, col.names = "randomForest Estimate of INTP")
+kable(rf.est, col.names = "randomForest Estimate of INTP", caption = "randomForest IPW")
 ```
 
 ## CForest
@@ -525,7 +526,7 @@ if(file.exists("cfPred.csv")){
 
 cf.est = (sum(w.all[!miss]*y[!miss]) + sum(yhat * w))/sum(w.all)
 cf.df = tibble("cf.est" = cf.est) #1665.763
-kable(cf.df, col.names = "CForest Imputation Estimate")
+kable(cf.df, col.names = "CForest Imputation Estimate", caption = "CForest Imputation")
 ```
 
 
