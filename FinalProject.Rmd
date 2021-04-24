@@ -3,9 +3,9 @@ title: "American Community Survery Project"
 author: "Jonah Maroszek"
 date: "3/24/2021"
 output:
-  html_document: default
   pdf_document: default
   word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -169,6 +169,7 @@ GUIDE is a natural choice to begin analyzing data with missing values; however, 
 A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean, where we simply ignore missing values in INTP, and the simple weighted estimate of the mean.
 
 ```{r IPW Mean Estimation, echo = FALSE, cache = TRUE}
+include_graphics("classTree.JPG")
 #IPW method with classification GUIDE Tree
 zclass = read.table("classfit.txt", header = TRUE)
 p.nonmissing = zclass[,5] #prob INTP is non-missing
@@ -203,8 +204,10 @@ kable(results, digits = 2,
 ```
 
 
+
 ### Estimation of Mean Using GUIDE Imputation
 ```{r Guide Tree and Forest Imputation, echo = FALSE, cache = TRUE}
+include_graphics("regTree.JPG")
 zreg = read.table("regFit.txt", header = T)
 yhat = zreg$predicted
 imputed.tree = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat[!g])))/(sum(w))  
@@ -213,11 +216,14 @@ zreg.forest = read.table("regForestFit.txt", header = T)
 yhat.f =zreg.forest$predicted
 imputed.forest = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat.f[!g])))/(sum(w)) 
 
-reg.table = data.frame("tree" = imputed.tree,
+reg.table = tibble("tree" = imputed.tree,
                        "forest" = imputed.forest)
+
 
 kable(reg.table, digits = 3, col.names = c("Tree Estimate", "Forest Estimate"))
 ```
+
+
 
 ## Adjustment to Data Set
 In the middle of the project, it has come to my attention that there were some very young people surveyed by the ACS. For the remainder of the analysis methods, people younger than 15 years old will be removed from the data set. With these observations removed, there are now 57411 rows and 77 columns. I have chosen not to redo the GUIDE analysis at this time because redoing all the calculations will cost at least 12 hours of cpu runtime, and there is still plenty left to do in the project. I anticipate the guide methods will result in a *lower estimations of the mean* than the following methods will because it includes these younger members. These younger members will most likely have lower values for variables important to predicting INTP such as annual income. With that being said, the GUIDE methods do not produce unreasonably low estimates; however, we will acknowledge this bias when making conclusions about the mean of INTP after other methods have been considered.
@@ -492,7 +498,7 @@ kable(rf.est, col.names = "randomForest Estimate of INTP")
 ```
 
 ## CForest
-RandomForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied.
+The final method I used to estimate INTP was CForest. CForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied.
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
 
 #must find missing before imputation to get use out of prediction model 
