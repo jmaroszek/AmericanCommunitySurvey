@@ -23,14 +23,14 @@ library(randomForest)
 library(partykit)
 ```
 ## Introduction
-In this project I will use data for the state of Tennessee collected by ACS (American Community Survery) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. 
+In this project I will use data for the state of Tennessee collected by ACS (American Community Survey) in order to estimate the mean of the variable INTP, which measures interest, dividends, and rental income. The initial data set contains 68,415 observations with 288 variables, though not all will be needed in predicting INTP. 
 
-I will use two methods to estimate the mean of INTP. The first method is Inverse Probability Weighting, or IPW. In this method, we estimate the probability that a response $y_i$ is nonmissing, we call this $\pi_i$. Let $w_i$ be the sampling weight for a particular $y_i$. We then sum over the set $S$ which contains all non-missing values of INTP.  
+I will use two methods to estimate the mean of INTP. The first method is Inverse Probability Weighting, or IPW. In this method, we estimate the probability that a response $y_i$ is nonmissing, we call this $\hat{\pi_i}$. Let $w_i$ be the sampling weight for a particular $y_i$. We then sum over the set $S$ which contains all non-missing values of INTP.  
 
-$$ \mu = (\sum_{i \in S}w_i/\hat{\pi_i})^{-1}\sum_{i \in S}w_iy_i/\hat{\pi_i} $$
-The second method is through imputation. Here we estimate the missing value, denoted $\hat{y_i}$. The other variables have the same meaning as in the IPW formula, with the addition of $\bar{S}$, which refers to the compliment of set $S$.  
+$$ \mu = (\sum_{i \in S}w_i/\hat{\pi_i})^{-1}\sum_{i \in S}w_iy_i/\hat{\pi_i} \tag{1}$$
+The second method is through imputation. Here we estimate the missing value of INTP, denoted $\hat{y_i}$. The other variables have the same meaning as in the IPW formula, with the addition of $\bar{S}$, which refers to the compliment of set $S$.  
 
-$$ \mu = (\sum_iw_i)^{-1} (\sum_{i \in S}w_iy_i+\sum_{j \in \bar{S}}w_i\hat{y_i}) $$
+$$ \mu = (\sum_iw_i)^{-1} (\sum_{i \in S}w_iy_i+\sum_{j \in \bar{S}}w_i\hat{y_i}) \tag{2}$$
 
 ```{r Data Import and Diagnosis, cache=TRUE, include=FALSE}
 #will need to correct column types later on 
@@ -43,13 +43,13 @@ initial.dimensions = dim(data)
 #cols.all.same = data[all.same]
 ```
 
-## Data Cleaning
+## Data Cleaning and Exploration
 There are 8 variables in the data set that either have only one unique value, or they are a unique identifier, and thus not useful for prediction of INTP. These variables are: ADJINC, DIVISION, FANCP, REGION, RT, SERIALNO, SPORDER, ST.  
 
 In addition to these variables, the variables PWGTP1-80 have been excluded, as these are additional sampling weights that are not needed for this analysis. 
 
-There is also a large number of missing values in this data set.
-Of the remaining variables, 43 of them have at least half of the values missing. The top ten variables that have the most missing values can be seen in the following table. Note that I have corrected for imputed values. There are many flag variables, such as FINTP, that take on values 0 or 1. In the case that FINTP = 1, I have set the corresponding INTP values to NA in order to run GUIDE analysis on the unadulterated data set. I have done this for every existing flag variable in the data set. I will use my own imputation methods later in order to use methods that can not handle missing values when estimating the mean of INTP.
+There is a large number of missing values in this data set.
+Of the remaining variables, 43 of them have at least half of the values missing. The top ten variables that have the most missing values can be seen in Table 1. Note that I have corrected for imputed values. There are many flag variables, such as FINTP, that take on values 0 or 1. The event where a flag variable equals 1 means that the ACS has imputed an originally missing value. In the case that FINTP = 1, I have set the corresponding INTP values to NA in order to run GUIDE analysis on the unadulterated data set. I have done this for every existing flag variable in the data set. I will use my own imputation methods later in order to use methods that can not handle missing values when estimating the mean of INTP.
 ```{r Allocation flag work, cache = TRUE, include = FALSE}
 
 #all flag variables start with an F, but some other columns might be absorbed too
@@ -131,7 +131,7 @@ write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
-Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in the following figure. After excluding the unimportant variables, the data set now contains 77 variables that will be used in the subsequent analysis. These 77 variables will form the basis of all models to follow unless noted otherwise. One can examine the guide description file in the appendix to see all of these 77 variables.
+Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in image 1. After excluding the unimportant variables, the data set now contains 77 variables that will be used in the subsequent analysis. These 77 variables will form the basis of all models to follow unless noted otherwise. One can examine the guide description file in the appendix to see all of these 77 variables.
 
 ```{r Plot Importance Scores, echo=FALSE, cache=TRUE}
 par(las=1,mar=c(5,12,4,2),cex=0.75)
@@ -146,7 +146,7 @@ barcol[type == "L"] <- "yellow"
 barcol[type == "U"] <- "cyan"
 n <- sum(x$Type != "U")
 barplot(rev(score[1:20]),names.arg=rev(vars[1:20]),
-col=rev(barcol[1:20]),horiz=TRUE,xlab="GUIDE importance scores", main = "Top 20 Important Variables")
+col=rev(barcol[1:20]),horiz=TRUE,xlab="GUIDE importance scores", main = "Image 1: Top 20 Important Variables")
 abline(v=1,col="red",lty=2)
 ```
 
@@ -163,10 +163,13 @@ write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 re
 ```
 
 ## GUIDE Methods
-GUIDE is a natural choice to begin analyzing data with missing values; however, as will be discussed in the "Adjustment to Data Set" section, this analysis was ran when participants younger than age 15 were included in the data set. This may explain why the classification forest produces a much lower estimate than the other methods.
+GUIDE is a natural choice to begin analyzing data with missing values; however, as will be discussed in the "Adjustment to Data Set" section, this analysis was ran when participants younger than age 15 were included in the data set.
 
 ### Estimation of Mean Using GUIDE and Inverse Probability Weighting
-A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula was used to estimate the mean of INTP. These methods are then compared to a niave estimation of the mean, where we simply ignore missing values in INTP, and the simple weighted estimate of the mean.
+A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula (equation 1) was used to estimate the mean of INTP. These methods are then compared to the simple weighted estimate of the mean. These results can be viewed in Table 2. 
+
+**Image 2: GUIDE Classification Tree**
+
 
 ```{r IPW Mean Estimation, echo = FALSE, cache = TRUE}
 include_graphics("classTree.JPG")
@@ -206,7 +209,12 @@ kable(results,
 
 
 
-### Estimation of Mean Using GUIDE Imputation
+### Estimation of Mean Using GUIDE Imputation  
+
+A GUIDE regression tree/forest was used to estimate missing values of INTP. Equation 2 was then applied to produce estimates of the mean of INTP. These results can be viewed in Table 3.
+
+**Image 3: GUIDE Imputation Tree**  
+
 ```{r Guide Tree and Forest Imputation, echo = FALSE, cache = TRUE}
 include_graphics("regTree.JPG")
 zreg = read.table("regFit.txt", header = T)
@@ -227,7 +235,7 @@ kable(reg.table, digits = 3, col.names = c("Tree Estimate", "Forest Estimate"), 
 
 
 ## Adjustment to Data Set
-In the middle of the project, it has come to my attention that there were some very young people surveyed by the ACS. For the remainder of the analysis methods, people younger than 15 years old will be removed from the data set. With these observations removed, there are now 57411 rows and 77 columns. I have chosen not to redo the GUIDE analysis at this time because redoing all the calculations will cost at least 12 hours of cpu runtime, and there is still plenty left to do in the project. I anticipate the guide methods will result in a *lower estimations of the mean* than the following methods will because it includes these younger members. These younger members will most likely have lower values for variables important to predicting INTP such as annual income. With that being said, the GUIDE methods do not produce unreasonably low estimates; however, we will acknowledge this bias when making conclusions about the mean of INTP after other methods have been considered.
+In the middle of the project, it has come to my attention that there were some very young people surveyed by the ACS. For the remainder of the analysis methods, people younger than 15 years old will be removed from the data set. With these observations removed, there are now 57411 rows and 77 columns. I have chosen not to redo the GUIDE analysis at this time because redoing all the calculations will cost at least 12 hours of cpu runtime, and there is still plenty left to do in the project. I anticipate the GUIDE imputation method will result in a *lower estimations of the mean* than the following methods will because it includes these younger members. These younger members will most likely have lower values for variables important to predicting INTP such as annual income. With that being said, the GUIDE imputation methods do not produce unreasonably low estimates; however, we will acknowledge this bias when making conclusions about the mean of INTP after other methods have been considered.
 
 ```{r data clean for rest of methods, cache = TRUE, include = FALSE}
 data = read_csv("psam_p47.csv", guess_max = 10000)
@@ -289,7 +297,7 @@ temp = final.data %>%
 
 rp.tree = rpart(FINTP ~ . - INTP - PWGTP, data = temp, method = "anova") #simple graph
 rp.real = rpart(FINTP ~. - INTP - PWGTP, data = final.data, method = "anova") #usef for estimate
-rpart.plot(rp.tree, main = "RPART Tree For Estimating Probability of Non-Missing INTP")
+rpart.plot(rp.tree, main = "Image 4: RPART Tree For Estimating Probability of Non-Missing INTP")
 p = predict(rp.real)
 w = final.data$PWGTP
 y = final.data$INTP
@@ -298,13 +306,14 @@ ipw.rpart =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 ```
 
 ### RPART Imputation Estimation
+I also fit an RPART tree in the regression context. The results of both the classification and regression tree can be seen in Table 4.
 ```{r rpart imputed, cache = TRUE, echo = FALSE}
 temp = final.data %>% 
   select(-ANC1P) %>% 
   select(-FINTP)
 
 rp.imp = rpart(INTP ~ ., weight = PWGTP, data = temp, method = "anova")
-rpart.plot(rp.imp, main = "RPART Tree for Estimating INTP")
+rpart.plot(rp.imp, main = "Image 5: RPART Tree for Estimating INTP")
 w = final.data$PWGTP
 y = final.data$INTP
 miss = is.na(y)
@@ -321,7 +330,7 @@ kable(x, caption = "RPART Estimates")
 
 
 ## Imputation with MICE
-I used MICE to impute missing values, as the following methods can not handle missing data (Logistic Regression, RandomForest, CTREE, and CForest). I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and most of the time it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables (as judged by GUIDE importance scoring algorithm) with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I tried to increase the number of iterations in glm.fit from 25 to 50, but that did not work for this variable. After MICE finished running, I added back the excluded variables and did imputation with the mode of the unimportant high level categorical variables.
+I used MICE to impute missing values, as the following methods can not handle missing data (Logistic Regression, RandomForest, CTREE, and CForest). I originally tried running MICE on the full data set with all variables included; however, there were some problems with this. MICE makes a call to nnet, which will take much longer to run with high level categorical variables included, and most of the time it crashes altogether. I raised the maximum number of weights from 1000 to 5000 in nnet, but it could still not handle some high level variables. I have removed unimportant high level variables (as judged by GUIDE importance scoring algorithm) with greater than 31 levels in order to run MICE. The variable JWRIP also caused problems within MICE, as it would consistently cause the glm.fit function to fail to converge. I tried to increase the number of iterations in glm.fit from 25 to 50, but that did not work for this variable. After MICE finished running, I added back the excluded variables and did imputation with the mode of the high level categorical variables.
 ```{r Missing Value Imputation, cache=FALSE, include=FALSE}
 
 #read mice data from saved file if it exists (MICE takes a long time to run)
@@ -355,6 +364,28 @@ if(file.exists("miceDataNoNa.csv")){
 
 ```
 
+```{r high level var, echo = FALSE, cache = TRUE}
+#find variables that have greater than 31 levels
+# for(var in names(final.data.no.missing)){
+#   if(is.factor(final.data.no.missing[[var]])){
+#    if(nlevels(final.data.no.missing[[var]]) > 31){
+#      print(paste(var, nlevels(final.data.no.missing[[var]])))
+#    }
+#   }
+# }
+
+
+
+#variables with greater than 31 levels
+high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", "SOCP")
+num.levels = c(49,206,170,270,270,526,49,526)
+table = data.frame("Variable" = high.level.vars,
+                   "Levels" = num.levels)
+
+kable(table, caption = "High Level Variables (levels > 31)")
+
+```
+
 
 ## CTREE
 I have removed categorical variables with greater than 31 levels in order to use CTREE. 
@@ -382,26 +413,8 @@ gp = !is.na(y)
 ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
 ```
 
-```{r CTREE Regression, echo = FALSE, cache = T}
+```{r CTREE Regression, echo = FALSE, cache = TRUE}
 final.data.no.missing = final.data[!is.na(final.data$INTP),]
-
-#find variables that have greater than 31 levels
-# for(var in names(final.data.no.missing)){
-#   if(is.factor(final.data.no.missing[[var]])){
-#    if(nlevels(final.data.no.missing[[var]]) > 31){
-#      print(paste(var, nlevels(final.data.no.missing[[var]])))
-#    }
-#   }
-# }
-
-#variables with greater than 31 levels
-high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", "SOCP")
-num.levels = c(49,206,170,270,270,526,49,526)
-table = data.frame("Variable" = high.level.vars,
-                   "Levels" = num.levels)
-
-kable(table, caption = "High Level Variables (levels > 31)")
-
 no.high.level = final.data.no.missing %>% 
   select(-all_of(high.level.vars))
 
@@ -487,7 +500,7 @@ if(files.exist){
 df = tibble(ntrees = 1:500, mse = mse)
 ggplot(df) +
   geom_point(aes(x = ntrees, y = mse)) + 
-  ggtitle("MSE vs. Number of Trees in Random Forest") +
+  ggtitle("Image 6: MSE vs. Number of Trees in Random Forest") +
   xlab("Number of Trees") +
   ylab("MSE")
 
@@ -531,9 +544,7 @@ kable(cf.df, col.names = "CForest Imputation Estimate", caption = "CForest Imput
 
 
 ## Conclusion
+All of the methods used to estimate the mean of INTP produce consistent results. The lowest estimate, produced by a guide Regression Forest, is 1307, and the highest estimate, produced by CForest, is 1666. Many of the estimates are around 1500 (this is also the approximately the midpoint of the highest and lowest estimates). As such, 1500 seems to be a very reliable estimate of the mean of the variable INTP.  
 
-### stuff do to at the end
-Create appendix - guide files, files that store prediction, text based version of trees not shown.  
-Attach guide tree images to report.  
-Find way to get numbered pages with all figures not looking dumb.  
+Also, as a reminder, the GUIDE regression forest was created when very young members were included in the data set, which I hypothesized would result in a lower estimate of the mean of INTP. This prediction turned out to be correct. The GUIDE imputation methods are the only results that give answers in the 1300's, so we can effectively view this as a lower bound for our estimate.
 
