@@ -388,7 +388,7 @@ kable(table, caption = "High Level Variables (levels > 31)")
 
 
 ## CTREE
-I have removed categorical variables with greater than 31 levels in order to use CTREE. 
+CTREE was used in with both methods of estimating the mean of INTP. These results can be seen in Table 6.
 ```{r CTREE IPW, echo = FALSE, cache = TRUE}
 
 #if prediction file exists, read the data from that. otherwise run ctree algorithm
@@ -419,15 +419,14 @@ no.high.level = final.data.no.missing %>%
   select(-all_of(high.level.vars))
 
 
-
 if(file.exists("ctreeRegYHAT.txt")){
   table = read_table("ctreeRegYHAT.txt", col_types = "i")
   yhat = table$yhat
 }else{
   ct.reg = ctree(INTP ~. - FINTP, weights = no.high.level$PWGTP, data = no.high.level)
   yhat = predict(ct.reg, newdata = no.high.level)
-  ct.reg.results = tibble("yhat" = yhat)
-  write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
+  #ct.reg.results = tibble("yhat" = yhat)
+  #write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
 }
 
 w.ctree = no.high.level$PWGTP
@@ -447,7 +446,7 @@ kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estim
 ## Logistic Regression
 I used a Logistic Regression model to estimate $\hat{\pi_i}$, and then used the IPW formula to estimate the mean of INTP.
 
-I attempted to fit a logistic regression model with all the variables present; however, after a significant run time, it turns out that including the high level categorical variables resulted in a rank deficient matrix, and thus produced an unreliably low estimate. I ran the logistic model again with unimportant high level categorical variables removed (as judged by GUIDE importance scoring).
+I attempted to fit a logistic regression model with all the variables present; however, after a significant run time, it turns out that including the high level categorical variables resulted in a rank deficient matrix, and thus produced an unreliably low estimate. I ran the logistic model again with unimportant high level categorical variables removed (as judged by GUIDE importance scoring). This estimate can be seen in Table 7.
 
 ```{r Logisitic Regression, echo=FALSE, warning=FALSE, cache=TRUE}
 mice.data = mice.data %>% mutate(INTP = final.data$INTP) #restore missing values to INTP 
@@ -508,7 +507,7 @@ ggplot(df) +
 rf.y = rf.data$INTP
 rf.miss = is.na(rf.y)
 rf.est = (sum(rf.w[!rf.miss]*rf.y[!rf.miss])+sum(rf.w[rf.miss]*yhat[rf.miss]))/sum(rf.w) + 25.5
-kable(rf.est, col.names = "randomForest Estimate of INTP", caption = "randomForest IPW")
+kable(rf.est, col.names = "randomForest Estimate", caption = "randomForest Imputation")
 ```
 
 ## CForest
@@ -547,4 +546,3 @@ kable(cf.df, col.names = "CForest Imputation Estimate", caption = "CForest Imput
 All of the methods used to estimate the mean of INTP produce consistent results. The lowest estimate, produced by a guide Regression Forest, is 1307, and the highest estimate, produced by CForest, is 1666. Many of the estimates are around 1500 (this is also the approximately the midpoint of the highest and lowest estimates). As such, 1500 seems to be a very reliable estimate of the mean of the variable INTP.  
 
 Also, as a reminder, the GUIDE regression forest was created when very young members were included in the data set, which I hypothesized would result in a lower estimate of the mean of INTP. This prediction turned out to be correct. The GUIDE imputation methods are the only results that give answers in the 1300's, so we can effectively view this as a lower bound for our estimate.
-
