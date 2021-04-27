@@ -388,7 +388,7 @@ kable(table, caption = "High Level Variables (levels > 31)")
 
 
 ## CTREE
-CTREE was used in with both methods of estimating the mean of INTP. These results can be seen in Table 6.
+CTREE was used with both methods of estimating the mean of INTP. These results can be seen in Table 6. Note that in the regression context, CTREE can not handle missing values in the response variable. For this reason, rows with missing values in the the INTP column have been removed.
 ```{r CTREE IPW, echo = FALSE, cache = TRUE}
 
 #if prediction file exists, read the data from that. otherwise run ctree algorithm
@@ -425,8 +425,8 @@ if(file.exists("ctreeRegYHAT.txt")){
 }else{
   ct.reg = ctree(INTP ~. - FINTP, weights = no.high.level$PWGTP, data = no.high.level)
   yhat = predict(ct.reg, newdata = no.high.level)
-  #ct.reg.results = tibble("yhat" = yhat)
-  #write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
+  ct.reg.results = tibble("yhat" = yhat)
+  write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
 }
 
 w.ctree = no.high.level$PWGTP
@@ -511,7 +511,7 @@ kable(rf.est, col.names = "randomForest Estimate", caption = "randomForest Imput
 ```
 
 ## CForest
-The final method I used to estimate INTP was CForest. CForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied.
+The final method I used to estimate INTP was CForest. CForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied. Like CTREE, CForest is unable to handle missing values in the response variable, so these rows have been removed from the analysis.
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
 
 #must find missing before imputation to get use out of prediction model 
@@ -546,3 +546,470 @@ kable(cf.df, col.names = "CForest Imputation Estimate", caption = "CForest Imput
 All of the methods used to estimate the mean of INTP produce consistent results. The lowest estimate, produced by a guide Regression Forest, is 1307, and the highest estimate, produced by CForest, is 1666. Many of the estimates are around 1500 (this is also the approximately the midpoint of the highest and lowest estimates). As such, 1500 seems to be a very reliable estimate of the mean of the variable INTP.  
 
 Also, as a reminder, the GUIDE regression forest was created when very young members were included in the data set, which I hypothesized would result in a lower estimate of the mean of INTP. This prediction turned out to be correct. The GUIDE imputation methods are the only results that give answers in the 1300's, so we can effectively view this as a lower bound for our estimate.
+
+# Appendix 
+
+## R Code 
+```{r setup Appendix}
+# knitr::opts_chunk$set(echo = TRUE)
+# library(tidyverse)
+# library(party)
+# library(knitr)
+# library(magrittr)
+# library(rpart)
+# library(rpart.plot)
+# library(gt)
+# library(mice)
+# library(imputeMissings)
+# library(randomForest)
+# library(partykit)
+```
+
+```{r Data Import and Diagnosis Appendix}
+# #will need to correct column types later on 
+# data = read_csv("psam_p47.csv", guess_max = 10000)
+# #data = data[!is.na(data$INTP),] #removes people younger than 15 from data set
+# initial.dimensions = dim(data)
+# 
+# #finds variables where every value is the same to exclude from analysis
+# #all.same = apply(data, 2, function(a) length(unique(a))==1)
+# #cols.all.same = data[all.same]
+```
+
+```{r Allocation flag work appendix}
+# 
+# #all flag variables start with an F, but some other columns might be absorbed too
+# possible.flag.vars = names(data %>% 
+#   select(starts_with("F"))) 
+# 
+# non.flag.vars = "FOD2P" #variable starting with F that isn't a flag variable
+# flag.vars = possible.flag.vars[!(possible.flag.vars %in% non.flag.vars)] #removes none-flag vars 
+# actual.vars = sub('.','',flag.vars) #removes leading F in flag variables
+# act.vars.in.data.logi = actual.vars %in% names(data) #not all of the real variables exist in the person data set
+# 
+# #update vectors to contain only the variables present in the data set for both the flag variables and the regular variable
+# flag.vars = flag.vars[act.vars.in.data.logi]
+# actual.vars = actual.vars[act.vars.in.data.logi]
+# index = 1 #will be used to index into actual.vars in the for loop 
+# 
+# #eplace value with NA if flag variable is one 
+# for(var in flag.vars){
+# flag.var.one = data[,var] == 1
+# data[,actual.vars[index]][flag.var.one] <-  NA
+# index = index + 1
+# }
+```
+
+
+```{r Data Cleaning appendix}
+# #First Phase of Data cleaning
+# vars.to.drop = c("ADJINC", "DIVISION", "FANCP", "REGION", "RT", "SERIALNO", "SPORDER", "ST")
+# clean.data.1 = data %>% 
+#   select(-all_of(vars.to.drop)) %>% 
+#   select(-num_range("PWGTP", 1:80)) 
+# 
+# dim.clean.data.1 = dim(clean.data.1)
+# 
+# #find proportion of missing values for remaining variables
+# missing.vals.logi = apply(clean.data.1,2, is.na)
+# prop.missing.vals = apply(missing.vals.logi, 2, sum) / dim.clean.data.1[1]
+# large.prop.missing.vals = prop.missing.vals[prop.missing.vals > 0.5]
+# top.ten.missing.vals = sort(large.prop.missing.vals, decreasing = TRUE)[1:10]
+# kable(top.ten.missing.vals, col.names = c("Proportion Missing"), caption = "Variables and Proportion of Missing Values", digits = 3)
+```
+
+```{r Variable Type Correction appendix}
+# num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP", "CITWP", "MARHYP", "YOEP") #numerical variables 
+# varnames.clean = names(clean.data.1) #get column names of clean data frame
+# cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
+# 
+# #this data set has correct column types 
+# clean.data.2 = clean.data.1 %>% 
+#   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
+#   mutate(across(all_of(cat.vars), as.character)) #changes type to character 
+# 
+# #write_csv(clean.data.2, "cleanData.csv") #export clean data (200 variables) file to use in guide
+```
+
+
+```{r Subset creation for importance scoring appendix}
+# take a small, random sample from the cleaned data frame in order to decrease run time of guide importance scoring algorithm
+# dim.clean.data.2 = dim(clean.data.2)
+# subset.indices = sample(1:dim.clean.data.2[1], dim.clean.data.2[1]/4) #randomly picked subset
+# subset = clean.data.2[subset.indices,] #1/4 the size of original data frame
+# write_csv(subset,"QuarterSubset.csv") #export clean data file to use in guide
+```
+
+```{r create guide description file for cleaned data set appendix}
+# #create guide description file for clean.data.2 
+# nvar = ncol(clean.data.2)
+# varnames = names(clean.data.2)
+# roles = rep("c", nvar) #default is categorical vars
+# roles[varnames %in% num.vars] = "n" #numerical variables
+# roles[varnames ==  "INTP"] = "d" #dependent variable
+# roles[varnames == "PWGTP"] = "w" #sampling weight variable
+# roles[varnames %in% vars.to.drop] = "x" #variables to exclude from analysis
+# 
+# #produce GUIDE Description File
+# write("cleanData.csv", file = "GUIDEdesc.txt")
+# write("NA",file="GUIDEdesc.txt",append=TRUE)
+# write("2",file="GUIDEdesc.txt",append=TRUE)
+# write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
+# row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
+```
+
+
+```{r Plot Importance Scores appendix}
+# col=rev(barcol[1:20],horiz=TRUE,xlab="GUIDE importance scores", main = "Image 1: Top 20 Important Variables")
+# abline(v=1,col="red",lty=2)
+```
+
+
+```{r Final Data Cleanse appendix}
+# #extract names of significant variables found in GUIDE to get final version of the data set for analysis
+# signifVarsOneString = read_lines("cleanDataFinal.txt", skip = 4, n_max = 1)
+# signif.Vars = strsplit(signifVarsOneString, split = " ")[[1]]
+# final.data = clean.data.2[signif.Vars]
+# write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 remaining
+```
+
+
+```{r IPW Mean Estimation appendix}
+# include_graphics("classTree.JPG")
+# #IPW method with classification GUIDE Tree
+# zclass = read.table("classfit.txt", header = TRUE)
+# p.nonmissing = zclass[,5] #prob INTP is non-missing
+# g = !is.na(clean.data.2$INTP) #nonmissing INTP obs
+# w = clean.data.2$PWGTP
+# ipw = sum(w[g]*clean.data.2$INTP[g]/p.nonmissing[g])/sum(w[g]/p.nonmissing[g])
+# 
+# #IWP method with classification GUIDE Forest
+# zclass.forest = read.table("classfitForest.txt", header = TRUE)
+# p.forest = zclass.forest[,2]
+# ipw.forest = sum(w[g]*clean.data.2$INTP[g]/p.forest[g])/sum(w[g]/p.forest[g])
+# 
+# naive.mean = mean(clean.data.2$INTP, na.rm = T) #mean from ignoring misisng values
+# simple = (sum(w[g]*clean.data.2$INTP[g]))/sum(w[g])
+# 
+# results = data.frame("GUIDE Tree Prediction" = ipw, 
+#                      "GUIDE Forest Prediction" = ipw.forest,
+#                      "Simple Weighted Sum" = simple)
+# 
+# kable(results, 
+#       digits = 2,
+#       col.names = c("GUIDE Tree Prediction", "GUIDE Forest Prediction", "Simple Weighted Sum"), 
+#       caption = "GUIDE IPW")
+# 
+# 
+# # gt(results) %>% 
+# #   cols_label("GUIDE.Tree.Prediction" = "GUIDE Tree Prediction",
+# #              "GUIDE.Forest.Prediction" = "GUIDE Forest Prediction",
+# #              "Simple.Weighted.Sum" = "Simple Weighted Sum",
+# #              "Niave.Mean" = "Niave Mean") %>% 
+# #   tab_header(title = "GUIDE IPW Methods",
+# #              subtitle = "Figure 1")
+```
+
+
+```{r Guide Tree and Forest Imputatio appendix}
+# include_graphics("regTree.JPG")
+# zreg = read.table("regFit.txt", header = T)
+# yhat = zreg$predicted
+# imputed.tree = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat[!g])))/(sum(w))  
+# 
+# zreg.forest = read.table("regForestFit.txt", header = T)
+# yhat.f =zreg.forest$predicted
+# imputed.forest = ((sum(w[g]*clean.data.2$INTP[g])) + (sum(w[!g]*yhat.f[!g])))/(sum(w)) 
+# 
+# reg.table = tibble("tree" = imputed.tree,
+#                        "forest" = imputed.forest)
+# 
+# 
+# kable(reg.table, digits = 3, col.names = c("Tree Estimate", "Forest Estimate"), caption = "GUIDE Imputation")
+```
+
+
+
+```{r data clean for rest of methods appendix}
+# data = read_csv("psam_p47.csv", guess_max = 10000)
+# data = data[!is.na(data$INTP),] #removes people younger than 15 from data set
+# 
+# #all flag variables start with an F, but some other columns might be absorbed too
+# possible.flag.vars = names(data %>% 
+#   select(starts_with("F"))) 
+# 
+# non.flag.vars = "FOD2P" #variable starting with F that isn't a flag variable
+# flag.vars = possible.flag.vars[!(possible.flag.vars %in% non.flag.vars)] #removes none-flag vars 
+# actual.vars = sub('.','',flag.vars) #removes leading F in flag variables
+# act.vars.in.data.logi = actual.vars %in% names(data) #not all of the real variables exist in the person data set
+# 
+# #update vectors to contain only the variables present in the data set for both the flag variables and the regular variable
+# flag.vars = flag.vars[act.vars.in.data.logi]
+# actual.vars = actual.vars[act.vars.in.data.logi]
+# index = 1 #will be used to index into actual.vars in the for loop 
+# 
+# #eplace value with NA if flag variable is one 
+# for(var in flag.vars){
+# flag.var.one = data[,var] == 1
+# data[,actual.vars[index]][flag.var.one] <-  NA
+# index = index + 1
+# }
+# 
+# vars.to.drop = c("ADJINC", "DIVISION", "FANCP", "REGION", "RT", "SERIALNO", "SPORDER", "ST")
+# clean.data.1 = data %>% 
+#   select(-all_of(vars.to.drop)) %>% 
+#   select(-num_range("PWGTP", 1:80))
+# 
+# num.vars = c("PWGTP","INTP", "AGEP", "JWMNP", "OIP","JWRIP","PAP", "OIP", "RETP","SEMP", "SSIP", "SSP", "WKWN", "WKHP", "WAGP","PINCP", "PERNP","POVPIP", "CITWP", "MARHYP", "YOEP") #numerical variables 
+# varnames.clean = names(clean.data.1) #get column names of clean data frame
+# cat.vars = varnames.clean[!(varnames.clean %in% num.vars)] #all categorical variables
+# 
+# #this data set has correct column types 
+# final.data = clean.data.1 %>% 
+#   mutate(across(all_of(num.vars), as.double)) %>% #changes type to double 
+#   mutate(across(all_of(cat.vars), as.factor)) #change to factor
+# 
+# signifVarsOneString = read_lines("cleanDataFinal.txt", skip = 4, n_max = 1)
+# signif.Vars = strsplit(signifVarsOneString, split = " ")[[1]]
+# signif.Vars[78] = "FINTP" #dont want to remove this
+# final.data = final.data[signif.Vars] ##57411 by 77
+# dim.final.data = dim(final.data)
+```
+
+```{r rpart appendix}
+# temp = final.data %>% 
+#   select(-ANC1P) %>% 
+#   select(-SOCP)
+# 
+# rp.tree = rpart(FINTP ~ . - INTP - PWGTP, data = temp, method = "anova") #simple graph
+# rp.real = rpart(FINTP ~. - INTP - PWGTP, data = final.data, method = "anova") #usef for estimate
+# rpart.plot(rp.tree, main = "Image 4: RPART Tree For Estimating Probability of Non-Missing INTP")
+# p = predict(rp.real)
+# w = final.data$PWGTP
+# y = final.data$INTP
+# gp = !is.na(y)
+# ipw.rpart =  sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
+```
+
+
+```{r rpart imputed appendix}
+# temp = final.data %>% 
+#   select(-ANC1P) %>% 
+#   select(-FINTP)
+# 
+# rp.imp = rpart(INTP ~ ., weight = PWGTP, data = temp, method = "anova")
+# rpart.plot(rp.imp, main = "Image 5: RPART Tree for Estimating INTP")
+# w = final.data$PWGTP
+# y = final.data$INTP
+# miss = is.na(y)
+# yhat = predict(rp.imp, newdata = temp)
+# rp.estimate =  (sum(w[!miss]*y[!miss])+sum(w[miss]*yhat[miss]))/sum(w)
+```
+
+
+```{r RPART Results appendix}
+# x = tibble("RPART IPW" = ipw.rpart,
+#            "RPART Impute" = rp.estimate)
+# kable(x, caption = "RPART Estimates")
+```
+
+
+
+```{r Missing Value Imputation appendix}
+# 
+# #read mice data from saved file if it exists (MICE takes a long time to run)
+# if(file.exists("miceDataNoNa.csv")){
+#   mice.data = read_csv("miceDataNoNA.csv")
+#   mice.data = mice.data %>% 
+#     mutate(across(any_of(num.vars), as.double)) %>% #changes type to double 
+#     mutate(across(any_of(cat.vars), as.factor))
+# }else{
+#   y =final.data$INTP 
+#   no.intp = final.data %>% select(-INTP) %>% select(-JWRIP) %>% select(-all_of(high.level.vars))
+#   mice.result = mice(no.intp, m = 1, nnet.MaxNWts = 5000, control = list(maxit = 50))
+#   mice.data = complete(mice.result,1) #extract results from mice
+#   mice.copy = mice.data #did this orginaly so I wouldnt mess up the imputed data set 
+#   
+#   #add back variables that were taken out to run mice
+#   for(var in high.level.vars){
+#     mice.copy[var] = final.data[[var]]
+#   }
+#   
+#   #add back variables that were taken out to run mice
+#   mice.copy$JWRIP = final.data$JWRIP
+#   
+#   #impute with mode
+#   mice.copy = impute(mice.copy)
+#   mice.copy$INTP = final.data$INTP
+#   write_csv(mice.copy, file = "miceDataNoNA.csv")
+#   
+# }
+
+
+```
+
+```{r high level var appendix}
+#find variables that have greater than 31 levels
+# for(var in names(final.data.no.missing)){
+#   if(is.factor(final.data.no.missing[[var]])){
+#    if(nlevels(final.data.no.missing[[var]]) > 31){
+#      print(paste(var, nlevels(final.data.no.missing[[var]])))
+#    }
+#   }
+# }
+
+
+
+#variables with greater than 31 levels
+# high.level.vars = c("ANC1P","FOD1P", "INDP", "NAICSP", "PUMA", "OCCP", "RAC2P", "SOCP")
+# num.levels = c(49,206,170,270,270,526,49,526)
+# table = data.frame("Variable" = high.level.vars,
+#                    "Levels" = num.levels)
+# 
+# kable(table, caption = "High Level Variables (levels > 31)")
+
+```
+
+```{r CTREE IPW appendix}
+# 
+# #if prediction file exists, read the data from that. otherwise run ctree algorithm
+# if(file.exists("ctreePred.txt")){
+#   table = read_table("ctreePred.txt", col_types = "i")
+#   p = table$predicted 
+# }else{
+#   fmla = formula(FINTP ~. - INTP - PWGTP)
+#   ct = ctree(fmla, data = final.data.factor) 
+#   p = as.numeric(predict(ct))
+#   ctree.results = tibble("predicted" = p)
+#   write_csv(ctree.results, file = "ctreePred.txt")
+# }
+# 
+# 
+# #plot(ct, type = "simple", drop_terminal = T) plot not useful.
+# 
+# #ipw method 
+# w = final.data$PWGTP
+# y = final.data$INTP
+# gp = !is.na(y)
+# ipw.ct = sum(w[gp]*y[gp]/p[gp])/sum(w[gp]/p[gp])
+```
+
+```{r CTREE Regression appendix}
+# final.data.no.missing = final.data[!is.na(final.data$INTP),]
+# no.high.level = final.data.no.missing %>% 
+#   select(-all_of(high.level.vars))
+# 
+# 
+# if(file.exists("ctreeRegYHAT.txt")){
+#   table = read_table("ctreeRegYHAT.txt", col_types = "i")
+#   yhat = table$yhat
+# }else{
+#   ct.reg = ctree(INTP ~. - FINTP, weights = no.high.level$PWGTP, data = no.high.level)
+#   yhat = predict(ct.reg, newdata = no.high.level)
+#   #ct.reg.results = tibble("yhat" = yhat)
+#   #write_csv(ct.reg.results, file = "ctreeRegYHAT.txt")
+# }
+# 
+# w.ctree = no.high.level$PWGTP
+# y.ctree = no.high.level$INTP
+# miss.ctree = is.na(y.ctree)
+# ct.reg.est = (sum(w.ctree[!miss.ctree]*y.ctree[!miss.ctree])+sum(w.ctree[miss.ctree]*yhat[miss.ctree]))/sum(w.ctree)
+```
+
+
+```{r ctree results appendix}
+# ctree.results = tibble("IPW" = ipw.ct,
+#                        "Reg" = ct.reg.est)
+# kable(ctree.results, col.names = c("CTREE IPW Estimate", "CTREE Regression Estimate"), digits = 2, caption = "CTREE Results")
+
+```
+
+
+```{r Logisitic Regression appendix}
+# mice.data = mice.data %>% mutate(INTP = final.data$INTP) #restore missing values to INTP 
+# all.obs.no.high.level = mice.data %>% select(-all_of(high.level.vars)) %>% select(-MSP)
+# if(file.exists("logPredProbs.csv")){
+#   probmissing = read_csv("logPredProbs.csv",col_types = cols())
+#   probmissing = probmissing$probmissing
+# }else{
+#   log = glm(FINTP ~ . - INTP - PWGTP, data = mice.data, family = "binomial", control = list(trace = TRUE, maxit = 50))
+#   probmissing = predict(log, newdata = mice.data, type = "response") 
+#   write_csv(data.frame("probmissing" = probmissing), file = "logPredProbs.csv")
+# }
+#P(FINTP = 1) which is prob that FINTP is imputed in original and thus essentially MISSING  (so this var is not actually pi. it is 1- pi because pi refers to P(FINTP = 1))
+# p.log =  1-probmissing
+# y.log = all.obs.no.high.level$INTP
+# gp = !is.na(y.log)
+# w.log = all.obs.no.high.level$PWGTP
+# log.est = sum(w.log[gp]*y.log[gp]/p.log[gp])/sum(w.log[gp]/p.log[gp])
+# df = data.frame(x= log.est)
+# kable(df, col.names = "Logistic Regression Estimate", caption = "Logistic IPW")
+```
+
+```{r randomForest Regression appendix}
+# files.exist = file.exists("rfPred.csv") & file.exists("rfMSE.csv")
+# 
+# #create data without missing values in response or high level categorical vars
+# rf.data = mice.data %>% select(-all_of(high.level.vars)) %>%  select(INTP, everything())
+# rf.data = rf.data[!is.na(rf.data$INTP),] #remove missing intp rows
+# rf.w = rf.data$PWGTP
+# rf.data = rf.data %>% select(-c(PWGTP,FINTP))
+# 
+# #load predicted values from file 
+# if(files.exist){
+#   table1 = read_csv("rfPred.csv", col_type = "d")
+#   yhat = table1$yhat
+#   table2 = read_csv("rfMSE.csv", col_types = "d")
+#   mse = table2$mse
+# }else{
+#   predictors = rf.data[,2:dim(rf.data)[2]] #exclude first column from predictor (INTP)
+#   rf = randomForest(y = rf.data$INTP, x = predictors, do.trace = TRUE, ntree = 500) #seems to level off at 100 trees
+#   yhat = predict(rf, newdata = rf.data)
+#   mse = rf$mse
+# }
+# 
+# #show mse vs number of trees
+# df = tibble(ntrees = 1:500, mse = mse)
+# ggplot(df) +
+#   geom_point(aes(x = ntrees, y = mse)) + 
+#   ggtitle("Image 6: MSE vs. Number of Trees in Random Forest") +
+#   xlab("Number of Trees") +
+#   ylab("MSE")
+# 
+# #estimate mean 
+# rf.y = rf.data$INTP
+# rf.miss = is.na(rf.y)
+# rf.est = (sum(rf.w[!rf.miss]*rf.y[!rf.miss])+sum(rf.w[rf.miss]*yhat[rf.miss]))/sum(rf.w) 
+# kable(rf.est, col.names = "randomForest Estimate", caption = "randomForest Imputation")
+```
+
+
+```{r CFOREST Regression appendix}
+
+# #must find missing before imputation to get use out of prediction model 
+# y = mice.data$INTP
+# w.all = mice.data$PWGTP
+# miss = is.na(y)
+# 
+# cforest.data = mice.data %>% 
+#   select(-all_of(high.level.vars)) %>% 
+#   replace_na(list(INTP = ipw.rpart))
+# 
+# if(file.exists("cfPred.csv")){
+#   table = read_csv("cfPred.csv", col_types = cols())
+#   yhat = table$yhat
+#   w = table$weights
+# }else{
+#   w = cforest.data$PWGTP
+#  cf = partykit::cforest(INTP ~ . - FINTP - PWGTP, data = cforest.data, weights = w, ntree = 100, trace = TRUE)
+#  miss.rows = cforest.data[miss,] #predict can not allocate enough memory to do yhat on all rows
+#  yhat = predict(cf, newdata = miss.rows)
+#  df = tibble(yhat = yhat, weights = miss.rows$PWGTP)
+#  write_csv(df, file = "cfPred.csv")
+# }
+# 
+# cf.est = (sum(w.all[!miss]*y[!miss]) + sum(yhat * w))/sum(w.all)
+# cf.df = tibble("cf.est" = cf.est) #1665.763
+# kable(cf.df, col.names = "CForest Imputation Estimate", caption = "CForest Imputation")
+```
+
