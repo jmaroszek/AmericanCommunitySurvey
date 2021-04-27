@@ -131,7 +131,7 @@ write("2",file="GUIDEdesc.txt",append=TRUE)
 write.table(cbind(1:nvar,varnames,roles),file="GUIDEdesc.txt",
 row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
 ```
-Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm. The 20 most important variables can be seen in image 1. After excluding the unimportant variables, the data set now contains 77 variables that will be used in the subsequent analysis. These 77 variables will form the basis of all models to follow unless noted otherwise. One can examine the guide description file in the appendix to see all of these 77 variables.
+Of the remaining 200 variables, 123 variables were found to be unimportant in predicting INTP by GUIDE's importance scoring algorithm (performed on a random subset 25% of the original size). The 20 most important variables can be seen in image 1. After excluding the unimportant variables, the data set now contains 77 variables that will be used in the subsequent analysis. These 77 variables will form the basis of all models to follow unless noted otherwise. One can examine the guide description file in the appendix to see all of these 77 variables.
 
 ```{r Plot Importance Scores, echo=FALSE, cache=TRUE}
 par(las=1,mar=c(5,12,4,2),cex=0.75)
@@ -166,7 +166,7 @@ write_csv(final.data, "finalData.csv") #all unimportant variables removed; 77 re
 GUIDE is a natural choice to begin analyzing data with missing values; however, as will be discussed in the "Adjustment to Data Set" section, this analysis was ran when participants younger than age 15 were included in the data set.
 
 ### Estimation of Mean Using GUIDE and Inverse Probability Weighting
-A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula (equation 1) was used to estimate the mean of INTP. These methods are then compared to the simple weighted estimate of the mean. These results can be viewed in Table 2. 
+A GUIDE classification tree/forest was used to estimate the probability that an INTP response would be non-missing. Then the Inverse Probability Weighting formula (equation 1) was used to estimate the mean of INTP. These methods are then compared to the simple weighted estimate of the mean. These results can be viewed in Table 2. The GUIDE description and input file for this tree can be found in the appendix under "GUIDE Classification". 
 
 **Image 2: GUIDE Classification Tree**
 
@@ -211,7 +211,7 @@ kable(results,
 
 ### Estimation of Mean Using GUIDE Imputation  
 
-A GUIDE regression tree/forest was used to estimate missing values of INTP. Equation 2 was then applied to produce estimates of the mean of INTP. These results can be viewed in Table 3.
+A GUIDE regression tree/forest was used to estimate missing values of INTP. Equation 2 was then applied to produce estimates of the mean of INTP. These results can be viewed in Table 3. The GUIDE description and input file for this tree can be found in the appendix section "GUIDE Regression".
 
 **Image 3: GUIDE Imputation Tree**  
 
@@ -470,7 +470,7 @@ kable(df, col.names = "Logistic Regression Estimate", caption = "Logistic IPW")
 ```
 
 ## RandomForest
-RandomForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied.
+RandomForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied. The results can be seen in Table 8.
 
 This algorithm took nearly 30 hours to run on my computer with the default of 500 trees. I was curious to see if that many trees were really worth it. One can see that for this data set, after around 100 trees are constructed, there are only marginal improvements in lowering MSE.
 ```{r randomForest Regression, echo = FALSE, cache = TRUE}
@@ -511,7 +511,7 @@ kable(rf.est, col.names = "randomForest Estimate", caption = "randomForest Imput
 ```
 
 ## CForest
-The final method I used to estimate INTP was CForest. CForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied. Like CTREE, CForest is unable to handle missing values in the response variable, so these rows have been removed from the analysis.
+The final method I used to estimate INTP was CForest. CForest was used to estimate $\hat{y_i}$ and then the imputation formula was applied. Like CTREE, CForest is unable to handle missing values in the response variable, so these rows have been removed from the analysis. The results can be seen in Table 9.
 ```{r CFOREST Regression, echo = FALSE, cache = TRUE}
 
 #must find missing before imputation to get use out of prediction model 
@@ -1485,7 +1485,7 @@ Also, as a reminder, the GUIDE regression forest was created when very young mem
 # "finalDataDesc.txt"  (name of data description file)
 #         10  (number of cross-validations)
 #  1          (1=mean-based CV tree, 2=median-based CV tree)
-#      0.500  (SE number for pruning)
+#      0.125  (SE number for pruning)
 #  2          (1=unweighted, 2=weighted error estimates during pruning)
 #  2          (1=split point from quantiles, 2=use exhaustive search)
 #  1          (1=default max. number of split levels, 2=specify no. in next line)
